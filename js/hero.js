@@ -17,7 +17,7 @@
     '#else',
     'precision mediump float;',
     '#endif',
-    'uniform vec2 uRes; uniform float uTime; uniform float uEl;',
+    'uniform vec2 uRes; uniform float uTime; uniform float uEl; uniform float uDark;',
     'const float RIN = 3.0;',
     'const float ROUT = 9.0;',
     'float hash13(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }',
@@ -80,10 +80,12 @@
     '    }',
     '    p = pn;',
     '  }',
-    '  if (!captured) col += tr * stars(normalize(v));',
+    '  if (!captured) col += tr * stars(normalize(v)) * uDark;',
     '  col = vec3(1.0) - exp(-col * 1.5);',
     '  col = pow(col, vec3(0.92));',
-    '  gl_FragColor = vec4(col, 1.0);',
+    '  float m = max(max(col.r, col.g), col.b);',
+    '  float a = captured ? 1.0 : clamp(m * 1.6, 0.0, 1.0);',
+    '  gl_FragColor = vec4(col, a);',
     '}'
   ].join('\n');
 
@@ -109,7 +111,7 @@
     stop();
     var gl = null;
     try {
-      gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'low-power' }) ||
+      gl = canvas.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true, powerPreference: 'low-power' }) ||
            canvas.getContext('experimental-webgl');
     } catch (e) { gl = null; }
     if (!gl) { canvas.parentNode.classList.add('no-webgl'); return; }
@@ -138,6 +140,13 @@
     var uRes = gl.getUniformLocation(prog, 'uRes');
     var uTime = gl.getUniformLocation(prog, 'uTime');
     var uEl = gl.getUniformLocation(prog, 'uEl');
+    var uDark = gl.getUniformLocation(prog, 'uDark');
+    var root = document.documentElement;
+    function isDark() {
+      var t = root.getAttribute('data-theme');
+      if (t) return t === 'dark';
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
 
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var touch = (navigator.maxTouchPoints || 0) > 0;
@@ -163,6 +172,7 @@
       gl.uniform2f(uRes, canvas.width, canvas.height);
       gl.uniform1f(uTime, reduce ? 2.0 : (now - t0) / 1000);
       gl.uniform1f(uEl, (90 - incl) * Math.PI / 180);
+      gl.uniform1f(uDark, isDark() ? 1.0 : 0.0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
@@ -215,6 +225,8 @@
     function onLost(e) { e.preventDefault(); alive = false; canvas.parentNode.classList.add('no-webgl'); }
     canvas.addEventListener('webglcontextlost', onLost);
     document.addEventListener('visibilitychange', kick);
+    var mo = null;
+    if (window.MutationObserver) { mo = new MutationObserver(kick); mo.observe(root, { attributes: true, attributeFilter: ['data-theme'] }); }
 
     size();
     kick();
@@ -226,6 +238,7 @@
         if (slider) slider.removeEventListener('input', onSlider);
         if (ro) ro.disconnect(); else window.removeEventListener('resize', size);
         if (io) io.disconnect();
+        if (mo) mo.disconnect();
         document.removeEventListener('visibilitychange', kick);
         canvas.removeEventListener('pointerdown', down);
         canvas.removeEventListener('pointermove', move);

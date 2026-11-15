@@ -404,22 +404,40 @@
       return part();
     });
   }
-  var upRunning = false;
+  var upRunning = false, upBatchErr = false;
+  /* Close the upload dialog (whatever dialog is open is the upload one while a batch runs). */
+  function closeUploadDialog() {
+    try {
+      if (modalEl && (modalEl.querySelector('#mUpForm') || modalEl.querySelector('#upList'))) closeModal();
+    } catch (e) {
+      /* last resort: remove the overlay directly so the page is never left locked */
+      var m = document.querySelector('.modal'); if (m) m.remove();
+      modalEl = null; document.body.classList.remove('modal-open');
+    }
+  }
   function runUploads() {
-    if (upRunning) return; upRunning = true; uploading = true;
+    if (upRunning) return; upRunning = true; uploading = true; upBatchErr = false;
     (function next() {
       var u = UPQ.filter(function (x) { return x.st === 'wait'; })[0];
       if (!u) {
         upRunning = false; uploading = false; fetchedOnce = false;
         var done = UPQ.filter(function (x) { return x.st === 'ok'; })[0];
-        paintDock();
-        /* everything uploaded: close the dialog by itself (it stays open when a file failed, so the error can be read) */
-        if (!UPQ.some(function (x) { return x.st === 'err'; }) && modalEl && $('#mUpForm', modalEl)) closeModal();
-        if (done) { curSub = KEY[codeOf(done.cat)]; try { out.onSubject(curSub); } catch (e) { /* ignore */ } }
-        refresh(); return;
+        /* everything uploaded: close the dialog by itself first (it stays open when a file failed, so the error can be read) */
+        if (!upBatchErr && !UPQ.some(function (x) { return x.st === 'err'; })) closeUploadDialog();
+        try { paintDock(); } catch (e) { if (window.console) console.error(e); }
+        try { if (done) { curSub = KEY[codeOf(done.cat)]; out.onSubject(curSub); } } catch (e) { /* ignore */ }
+        try { refresh(); } catch (e) { if (window.console) console.error(e); }
+        return;
       }
-      u.st = 'run'; paintUploads();
-      uploadFile(u).then(function () { u.st = 'ok'; u.done = u.size; paintUploads(); next(); }, function (e) { u.st = 'err'; u.msg = e.message; paintUploads(); next(); });
+      u.st = 'run'; try { paintUploads(); } catch (e) { /* ignore */ }
+      uploadFile(u).then(function () {
+        u.st = 'ok'; u.done = u.size;
+      }, function (e) {
+        u.st = 'err'; u.msg = (e && e.message) || String(e); upBatchErr = true;
+      }).then(function () {
+        try { paintUploads(); } catch (e) { /* ignore */ }
+        next();
+      });
     })();
   }
   function onUploadSubmit() {
