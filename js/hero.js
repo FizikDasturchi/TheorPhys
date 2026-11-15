@@ -46,7 +46,7 @@
     '  vec3 fwd = -normalize(cam);',
     '  vec3 right = normalize(cross(fwd, vec3(0.0, 1.0, 0.0)));',
     '  vec3 upv = cross(right, fwd);',
-    '  vec3 v = normalize(fwd + (uv.x * right + uv.y * upv) * 0.58);',
+    '  vec3 v = normalize(fwd + (uv.x * right + uv.y * upv) * 0.50);',
     '  vec3 p = cam;',
     '  vec3 hv = cross(p, v); float h2 = dot(hv, hv);',
     '  vec3 col = vec3(0.0); float tr = 1.0; bool captured = false;',
