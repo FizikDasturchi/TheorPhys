@@ -511,11 +511,6 @@
 
   /* ---------- Roadmap for new students ---------- */
   var STEPS = [
-    { id: 'vt', title: L('Vectors and tensors', 'Векторы и тензоры', 'Vektor va tenzorlar'),
-      text: L('Start with vector calculus: gradient, divergence, curl, line and surface integrals. Then move to index notation, the metric and tensors. Every later subject, from electrodynamics to curved spacetime, is written in this language.',
-              'Начните с векторного анализа: градиент, дивергенция, ротор, линейные и поверхностные интегралы. Затем перейдите к индексным обозначениям, метрике и тензорам. На этом языке записаны все дальнейшие предметы, от электродинамики до искривлённого пространства-времени.',
-              "Vektor analizidan boshlang: gradient, divergensiya, rotor, chiziqli va sirt integrallari. So'ng indekslar bilan yozuv, metrika va tenzorlarga o'ting. Elektrodinamikadan tortib egri fazo-vaqtgacha keyingi barcha fanlar shu tilda yoziladi."),
-      books: ['corral', 'schey', 'dullemond'], booksTab: 'vt' },
     { id: 'mech', title: L('Classical mechanics', 'Классическая механика', 'Klassik mexanika'),
       text: L('Learn the Lagrangian and Hamiltonian formalism. The principle of least action and Noether’s theorem are the backbone of everything that follows, including geodesic motion.',
               'Освойте лагранжев и гамильтонов формализм. Принцип наименьшего действия и теорема Нётер — основа всего дальнейшего, включая движение по геодезическим.',

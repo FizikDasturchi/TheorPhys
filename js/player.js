@@ -35,44 +35,6 @@
     return apiPromise;
   };
 
-  /* Returns a Promise of the video ids of a playlist. A hidden, never-played player is created for it,
-   * asked for getPlaylist(), and destroyed again. Rejects when the playlist cannot be read (private,
-   * removed, blocked, offline) so the caller can fall back to playing the playlist as one item. */
-  SP.playlistIds = function (list) {
-    return new Promise(function (resolve, reject) {
-      var host = document.createElement('div'), inner = document.createElement('div');
-      host.setAttribute('aria-hidden', 'true');
-      host.style.cssText = 'position:fixed;left:-9999px;top:0;width:220px;height:220px;overflow:hidden;pointer-events:none;';
-      host.appendChild(inner);
-      document.body.appendChild(host);
-      var p = null, tries = 0, done = false, tm = 0;
-      function finish(ids, err) {
-        if (done) return;
-        done = true; clearInterval(tm);
-        try { if (p && p.destroy) p.destroy(); } catch (e) { /* ignore */ }
-        if (host.parentNode) host.parentNode.removeChild(host);
-        if (err) reject(err); else resolve(ids);
-      }
-      function poll() {
-        tries++;
-        var ids = null;
-        try { ids = p.getPlaylist(); } catch (e) { /* not ready yet */ }
-        if (ids && ids.length) finish(ids.slice());
-        else if (tries > 30) finish(null, new Error('playlist timeout'));
-      }
-      try {
-        p = new window.YT.Player(inner, {
-          width: 220, height: 220,
-          playerVars: { listType: 'playlist', list: list, playsinline: 1 },
-          events: {
-            onReady: function () { tm = setInterval(poll, 400); },
-            onError: function () { finish(null, new Error('playlist error')); }
-          }
-        });
-      } catch (e) { finish(null, e); }
-    });
-  };
-
   /* Creates a player inside the element with id hostId.
    * spec: { video: id, start } for one video, or { list: playlistId, index, start } for a playlist
    * opts: onEnd(), onProgress(seconds, duration, playlistIndex), onError(code)

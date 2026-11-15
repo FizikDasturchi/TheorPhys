@@ -1,17 +1,13 @@
 /* Layout: a quiet academic page (paper, serif headings, cobalt links) opened by a dark space hero.
    Tokens first; every colour below comes from them. */
 :root {
-  --bg: #f7f2e7;
-  --bg-art:
-    radial-gradient(900px 560px at 90% -6%, rgba(242, 145, 90, 0.26), transparent 62%),
-    radial-gradient(820px 700px at -8% 106%, rgba(35, 66, 196, 0.12), transparent 60%),
-    linear-gradient(180deg, #faf6ec 0%, #f3ecdc 100%);
+  --bg: #ffffff;
   --surface: #ffffff;
-  --sunken: #efe8d9;
-  --hover: #f5efe2;
+  --sunken: #f1f4f9;
+  --hover: #f4f7fc;
   --text: #0b1020;
   --muted: #465167;
-  --line: #dbd2bf;
+  --line: #d3dae6;
   --accent: #2342c4;
   --accent-ink: #ffffff;
   --hot: #c2410c;
@@ -29,7 +25,6 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg-art: none;
     --bg: #0c1018;
     --surface: #131925;
     --sunken: #0a0d14;
@@ -46,7 +41,6 @@
   }
 }
 :root[data-theme="dark"] {
-  --bg-art: none;
   --bg: #0c1018;
   --surface: #131925;
   --sunken: #0a0d14;
@@ -66,9 +60,7 @@
 html { -webkit-text-size-adjust: 100%; scroll-padding-top: 76px; }
 body {
   margin: 0;
-  background-color: var(--bg);
-  background-image: var(--bg-art);
-  background-attachment: fixed;
+  background: var(--bg);
   color: var(--text);
   font: 400 16px/1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
@@ -194,9 +186,6 @@ ul.tags { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
 .sechead { margin-bottom: 20px; max-width: 70ch; }
 .sechead p { color: var(--muted); margin: 8px 0 0; }
 .pagehead { padding: 44px 0 4px; border-bottom: 1px solid var(--line); background: var(--surface); }
-@supports (background: color-mix(in srgb, white 50%, transparent)) {
-  .pagehead { background: color-mix(in srgb, var(--surface) 70%, transparent); }
-}
 .pagehead h1 { font-size: clamp(2rem, 4vw, 2.8rem); letter-spacing: -0.02em; }
 .lead { color: var(--muted); font-size: 1.1rem; max-width: 68ch; margin: 12px 0 28px; }
 .card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; color: var(--text); text-decoration: none; }
@@ -602,17 +591,3 @@ a.card:hover { box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 22px rgba(15,
 .weblink__go svg { width: 16px; height: 16px; display: block; }
 .weblink .mls__del { right: 8px; }
 .shelf .libgrid { margin-top: 4px; }
-
-/* ---------- light theme backdrop: a sheet of spacetime (drawn by js/bg.js) ---------- */
-#spacetime { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; display: none; }
-:root[data-spacetime="on"] #spacetime { display: block; }
-@media print { #spacetime { display: none !important; } }
-
-/* ---------- a members' playlist shown like a course ---------- */
-.mpl { margin-top: 28px; }
-.mpl__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.mpl__head h3 { font-size: 1.25rem; }
-.mpl__head .mls__del { position: static; transform: none; flex: none; }
-.mpl > .meta { margin: 2px 0 12px; }
-.mpl .lec__n { min-width: 2.2em; }
-.pls > .sub { margin-top: 18px; }

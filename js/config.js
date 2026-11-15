@@ -15,9 +15,6 @@
  *               'legacy' -> sh ch oʻ gʻ (1995 alphabet)
  *               Uzbek strings in the source files are written in the 1995 spelling and converted
  *               automatically, so you can type new text the way you normally do.
- * youtubeApiKey  '' -> a playlist added on the Lectures page is split into its topics by asking the YouTube
- *                        player for the video ids and oEmbed for the titles (no key, no durations)
- *               'AIza...' -> a YouTube Data API v3 key: the topics come with their durations too (README: "Playlists")
  * defaultLang   'auto' picks the browser language (uz / ru / en), or force 'uz', 'ru', 'en'.
  */
 window.SITE_CONFIG = {
@@ -31,7 +28,6 @@ window.SITE_CONFIG = {
   },
   uzAlphabet: 'new',
   defaultLang: 'auto',
-  youtubeApiKey: '',
   email: 'ahmadjon@astrin.uz',
   youtubeChannel: 'https://www.youtube.com/@nazariyastrofizika',
   lastUpdated: '2026-11-15'
