@@ -112,7 +112,7 @@ main:focus { outline: none; }
 .brand__logo { display: inline-flex; width: 30px; height: 30px; color: var(--text); flex: none; }
 .brand__logo svg { width: 100%; height: 100%; }
 .brand__text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
-.brand__text b { font-family: var(--serif); font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand__text b { font-family: var(--serif); font-size: 0.95rem; font-weight: 600; line-height: 1.15; white-space: normal; max-width: 250px; }
 .brand__text small { font: 500 0.7rem/1.2 var(--mono); color: var(--muted); }
 .nav { display: flex; gap: 2px; margin-left: auto; }
 .nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; font-weight: 500; padding: 8px 9px; border-radius: 6px; position: relative; white-space: nowrap; }
@@ -638,3 +638,19 @@ a.card:hover { box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 22px rgba(15,
 .feature__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .feature__play--cover::after { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(180deg, rgba(5, 7, 13, 0.05) 30%, rgba(5, 7, 13, 0.82) 100%); }
 .feature__play--cover .playglyph { z-index: 1; }
+
+/* ---------- home: the space hero is a framed panel on the page, not a black slab ---------- */
+.herobox { width: calc(100% - 32px); max-width: 1264px; margin: 18px auto 0; border-radius: 22px; overflow: hidden; border: 1px solid var(--space-line); box-shadow: 0 22px 60px -28px rgba(5, 7, 13, 0.7), 0 2px 8px rgba(5, 7, 13, 0.12); background: var(--space); }
+.herobox .hero { border-bottom: 0; }
+.herobox .band { border-bottom: 0; }
+@media (max-width: 640px) { .herobox { width: calc(100% - 20px); margin-top: 10px; border-radius: 16px; } }
+
+/* Russian menu words are longer: switch to the compact menu earlier so the bar never overflows */
+@media (max-width: 1400px) {
+  html[lang="ru"] .menubtn { display: inline-flex; }
+  html[lang="ru"] .nav { display: none; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; gap: 0; padding: 8px 14px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  html[lang="ru"] body.navopen .nav { display: flex; }
+  html[lang="ru"] .nav a { padding: 12px 8px; font-size: 1rem; }
+  html[lang="ru"] .nav a[aria-current="page"]::after { left: 8px; right: auto; width: 28px; bottom: 6px; }
+  html[lang="ru"] .tools { margin-left: auto; }
+}
