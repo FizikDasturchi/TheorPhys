@@ -280,14 +280,41 @@
       (b.by ? '<p class="muted small">' + esc(ui('m.lib.addedBy', { name: b.by })) + '</p>' : '') +
       '<div class="libcard__act">' + actions + '</div></div></article>';
   }
+
+  /* ---------- search: Cyrillic and Latin find each other ----------
+   * fold() turns any text (Uzbek or Russian Cyrillic, old or new Uzbek Latin, English) into one rough
+   * Latin "skeleton": the same word typed in either script gives the same skeleton, so a Cyrillic query
+   * finds Latin titles and the other way round. Letters that are written differently in different
+   * spellings are merged (x/h, q/k, y/i, w/v, o' and o, g' and g, sh and s, double letters). */
+  var CYR = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'o', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y',
+    'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f',
+    'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sh', 'ъ': '', 'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+    'ў': 'o', 'қ': 'q', 'ғ': 'g', 'ҳ': 'h', 'і': 'i', 'ї': 'i', 'є': 'e', 'ґ': 'g', 'ә': 'a', 'ө': 'o', 'ү': 'u', 'ұ': 'u', 'ң': 'n', 'җ': 'j'
+  };
+  function fold(s) {
+    var x = String(s == null ? '' : s).toLowerCase();
+    x = x.replace(/[\u0400-\u04ff]/g, function (c) { return CYR.hasOwnProperty(c) ? CYR[c] : c; });
+    x = x.replace(/[\u02bb\u02bc'\u2018\u2019`\u00b4]/g, '')            /* o' g' -> o g, and every apostrophe */
+         .replace(/ş/g, 'sh').replace(/ç/g, 'ch').replace(/ö/g, 'o').replace(/ğ/g, 'g').replace(/ı/g, 'i');
+    try { x = x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* very old browser: keep accents */ }
+    x = x.replace(/sh/g, 's').replace(/ch/g, '\u010d').replace(/ts/g, '\u02a6').replace(/kh/g, 'h').replace(/zh/g, 'j')
+         .replace(/c/g, 'k').replace(/x/g, 'h').replace(/q/g, 'k').replace(/w/g, 'v').replace(/y/g, 'i')
+         .replace(/([a-z\u010d\u02a6])\1+/g, '$1');
+    return x.replace(/[^a-z0-9\u010d\u02a6\u0370-\uffff]+/g, ' ').replace(/^ | $/g, '');
+  }
+  function foldTokens(q) { var f = fold(q); return f ? f.split(' ') : []; }
   function libItems() {
     return ((DB && DB.books) || []).map(function (x) { var p = parseBook(x); return { id: x.id, fileId: x.fileId, author: x.author, by: x.by, mine: x.mine, c: p.c, s: KEY[p.c], ti: p.ti }; });
   }
   /* Without a search the chosen subject is shown. A search looks in every subject, because a book may have been filed elsewhere. */
   function libGrid() {
-    var q = libQ.toLowerCase();
-    var items = libItems().filter(function (b) { return (b.ti + ' ' + (b.author || '')).toLowerCase().indexOf(q) >= 0; });
-    if (!q) {
+    var qs = foldTokens(libQ);
+    var items = libItems().filter(function (b) {
+      var hay = fold(b.ti + ' ' + (b.author || ''));
+      return qs.every(function (w) { return hay.indexOf(w) >= 0; });
+    });
+    if (!qs.length) {
       var one = items.filter(function (b) { return b.s === curSub; });
       return one.length ? '<div class="libgrid">' + one.map(libCard).join('') + '</div>' : '<p class="muted">' + esc(ui('m.lib.emptySub')) + '</p>';
     }
@@ -406,19 +433,42 @@
     return '';
   }
   function serverProg() { var m = {}; ((DB && DB.prog) || []).forEach(function (p) { m[p.pl] = { i: +p.i || 0, t: +p.t || 0 }; }); return m; }
-  function playlistsHtml(embed, curId) {
+  /* A single video is one row. A playlist is shown like a course: its title, then one row per video (a "topic").
+   * The topics come from SiteYT (YouTube Data API when config has youtubeApiKey, otherwise the YouTube player).
+   * rowsFn(items, currentVideoId) is supplied by app.js and draws the same rows as the course lectures above. */
+  function isSingle(x) { return String(x.pl).indexOf('v:') === 0; }
+  function delBtn(x) {
+    return x.mine ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(x.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + x.title) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '';
+  }
+  function listRow(x, embed, curId) {
+    var single = isSingle(x);
+    var inner = '<span class="lec__n">' + ICON_PLAY + '</span><span class="lec__t"><b>' + esc(x.title) + '</b><small>' + esc(ui(single ? 'm.pl.kindVideo' : 'm.pl.kindList')) + (x.by ? ' &middot; ' + esc(x.by) : '') + '</small></span>';
+    var main = embed
+      ? '<button type="button" class="lec" data-mplay="' + esc(x.id) + '" data-key="' + esc(x.pl) + '" data-list="' + (single ? '0' : '1') + '"' + (curId === x.id ? ' aria-current="true"' : '') + '>' + inner + '<span class="lec__d"></span><span class="lec__bar" aria-hidden="true"></span></button>'
+      : '<a class="lec" data-last="' + esc(x.pl) + '" href="' + esc(ytUrl(x.pl)) + '" target="_blank" rel="noopener noreferrer">' + inner + '<span class="lec__d"></span><span class="lec__go">' + ICON_EXT + '</span></a>';
+    return '<li>' + main + delBtn(x) + '</li>';
+  }
+  function packBlock(x, embed, curId, curVid, rowsFn) {
+    var SY = window.SiteYT, r = SY && rowsFn ? SY.ensure(x.pl) : null;
+    var items = r && r.items ? r.items : [];
+    var meta = esc(ui('m.pl.kindList')) + (x.by ? ' &middot; ' + esc(x.by) : '') + (items.length ? ' &middot; ' + esc(ui('m.pl.count', { n: items.length })) : '');
+    var body;
+    if (items.length) body = '<ol class="lecs">' + rowsFn(items, curVid) + '</ol>';
+    else if (r && r.state === 'loading') body = '<p class="muted" role="status">' + esc(ui('m.pl.loading')) + '</p>';
+    else body = '<p class="muted">' + esc(ui('m.pl.noTopics')) + '</p><ol class="lecs mls">' + listRow(x, embed, curId) + '</ol>';
+    return '<section class="mpl" id="mpl-' + esc(x.id) + '"><div class="mpl__head"><h3>' + esc(x.title) + '</h3>' + delBtn(x) + '</div>' +
+      '<p class="meta">' + meta + '</p>' + body + '</section>';
+  }
+  function playlistsHtml(embed, curId, curVid, rowsFn) {
     if (!S.tok) return '';
     var rows;
     if (!DB) rows = '<p class="muted">' + esc(dbState === 'err' ? dbErr : ui('m.lib.loading')) + '</p>' + (dbState === 'err' ? '<p><button type="button" class="btn btn--sm" data-m="retry">' + esc(ui('m.lib.retry')) + '</button></p>' : '');
     else if (!lists().length) rows = '<p class="muted">' + esc(ui('m.pl.empty')) + '</p>';
-    else rows = '<ol class="lecs mls">' + lists().map(function (x) {
-      var single = String(x.pl).indexOf('v:') === 0;
-      var inner = '<span class="lec__n">' + ICON_PLAY + '</span><span class="lec__t"><b>' + esc(x.title) + '</b><small>' + esc(ui(single ? 'm.pl.kindVideo' : 'm.pl.kindList')) + (x.by ? ' &middot; ' + esc(x.by) : '') + '</small></span>';
-      var main = embed
-        ? '<button type="button" class="lec" data-mplay="' + esc(x.id) + '" data-key="' + esc(x.pl) + '" data-list="' + (single ? '0' : '1') + '"' + (curId === x.id ? ' aria-current="true"' : '') + '>' + inner + '<span class="lec__d"></span><span class="lec__bar" aria-hidden="true"></span></button>'
-        : '<a class="lec" data-last="' + esc(x.pl) + '" href="' + esc(ytUrl(x.pl)) + '" target="_blank" rel="noopener noreferrer">' + inner + '<span class="lec__d"></span><span class="lec__go">' + ICON_EXT + '</span></a>';
-      return '<li>' + main + (x.mine ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(x.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + x.title) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '') + '</li>';
-    }).join('') + '</ol>';
+    else {
+      var singles = lists().filter(isSingle), packs = lists().filter(function (x) { return !isSingle(x); });
+      rows = (singles.length ? (packs.length ? '<h3 class="sub">' + esc(ui('m.pl.videos')) + '</h3>' : '') + '<ol class="lecs mls">' + singles.map(function (x) { return listRow(x, embed, curId); }).join('') + '</ol>' : '') +
+        packs.map(function (x) { return packBlock(x, embed, curId, curVid, rowsFn); }).join('');
+    }
     return '<section class="course pls" id="course-members"><div class="pls__head"><h2>' + esc(ui('m.pl.title')) + '</h2>' +
       '<button type="button" class="btn btn--sm" data-m="addlist">' + esc(ui('m.pl.add')) + '</button></div><p>' + esc(ui('m.pl.intro')) + '</p>' + rows + '</section>';
   }
@@ -568,6 +618,8 @@
     webHtml: webHtml,
     webCount: function (k) { return DB ? webItems().filter(function (w) { return w.s === k; }).length : 0; },
     playlistsHtml: playlistsHtml,
+    lists: lists,
+    fold: fold,
     listById: listById,
     listByPl: listByPl,
     lastKey: lastKey,
