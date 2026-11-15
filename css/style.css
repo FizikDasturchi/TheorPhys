@@ -5,7 +5,7 @@
   --bg-art:
     radial-gradient(900px 560px at 90% -6%, rgba(242, 145, 90, 0.26), transparent 62%),
     radial-gradient(820px 700px at -8% 106%, rgba(35, 66, 196, 0.12), transparent 60%),
-    linear-gradient(180deg, #faf6ec 0%, #f3ecdc 100%);
+    linear-gradient(180deg, #faf6ec 0%, #f3ecdc 50%);
   --surface: #ffffff;
   --sunken: #efe8d9;
   --hover: #f5efe2;
