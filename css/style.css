@@ -29,7 +29,11 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg-art: none;
+    --bg-art:
+      radial-gradient(1000px 620px at 88% -8%, rgba(242, 145, 90, 0.14), transparent 60%),
+      radial-gradient(900px 720px at -6% 108%, rgba(84, 108, 255, 0.17), transparent 62%),
+      radial-gradient(760px 520px at 46% 52%, rgba(76, 52, 150, 0.11), transparent 70%),
+      linear-gradient(180deg, #0a0e18 0%, #0d1019 100%);
     --bg: #0c1018;
     --surface: #131925;
     --sunken: #0a0d14;
@@ -46,7 +50,11 @@
   }
 }
 :root[data-theme="dark"] {
-  --bg-art: none;
+  --bg-art:
+    radial-gradient(1000px 620px at 88% -8%, rgba(242, 145, 90, 0.14), transparent 60%),
+    radial-gradient(900px 720px at -6% 108%, rgba(84, 108, 255, 0.17), transparent 62%),
+    radial-gradient(760px 520px at 46% 52%, rgba(76, 52, 150, 0.11), transparent 70%),
+    linear-gradient(180deg, #0a0e18 0%, #0d1019 100%);
   --bg: #0c1018;
   --surface: #131925;
   --sunken: #0a0d14;
@@ -605,7 +613,7 @@ a.card:hover { box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 22px rgba(15,
 
 /* ---------- light theme backdrop: a sheet of spacetime (drawn by js/bg.js) ---------- */
 #spacetime { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; display: none; }
-:root[data-spacetime="on"] #spacetime { display: block; }
+:root[data-spacetime] #spacetime { display: block; }
 @media print { #spacetime { display: none !important; } }
 
 /* ---------- a members' playlist shown like a course ---------- */
@@ -616,3 +624,17 @@ a.card:hover { box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 22px rgba(15,
 .mpl > .meta { margin: 2px 0 12px; }
 .mpl .lec__n { min-width: 2.2em; }
 .pls > .sub { margin-top: 18px; }
+
+/* ---------- upload progress panel (stays when the dialog is closed) ---------- */
+.updock { position: fixed; right: 16px; bottom: 16px; z-index: 150; width: min(340px, calc(100vw - 32px)); padding: 12px 14px; border-radius: var(--radius); background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(5, 7, 13, 0.28); }
+.updock__row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.9rem; }
+.updock__row b { flex: 1; min-width: 0; font-weight: 600; }
+.updock__x { border: 0; background: transparent; color: var(--muted); font: 400 1.4rem/1 var(--sans); cursor: pointer; padding: 0 4px; }
+.updock__x:hover { color: var(--text); }
+.updock--ok { border-color: var(--accent); }
+.updock--bad { border-color: var(--hot); }
+
+/* ---------- first lecture's cover on the home page ---------- */
+.feature__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.feature__play--cover::after { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(180deg, rgba(5, 7, 13, 0.05) 30%, rgba(5, 7, 13, 0.82) 100%); }
+.feature__play--cover .playglyph { z-index: 1; }

@@ -209,7 +209,9 @@
         '<div class="feature__text"><h2>' + esc(ui('home.lectTitle')) + '</h2><p>' + esc(ui('home.lectText')) + '</p>' +
           '<p class="meta">' + esc(ui('lect.lang')) + ' · ' + lectureCount() + ' · ' + esc(ui('lect.mech')) + ', ' + esc(ui('lect.em')) + ', Wolfram Mathematica</p>' +
           '<p><a class="btn" href="#lectures">' + esc(ui('home.lectCta')) + '</a></p></div>' +
-        '<a class="feature__play" href="#lectures" aria-label="' + esc(t(first.title)) + '"><span class="playglyph">' + ICON.play + '</span>' +
+        '<a class="feature__play' + (CFG.embedVideos !== false ? ' feature__play--cover' : '') + '" href="#lectures" aria-label="' + esc(t(first.title)) + '">' +
+          (CFG.embedVideos !== false ? '<img class="feature__img" data-yt="' + esc(first.id) + '" src="https://i.ytimg.com/vi/' + esc(first.id) + '/maxresdefault.jpg" alt="" loading="lazy">' : '') +
+          '<span class="playglyph">' + ICON.play + '</span>' +
           '<span class="feature__cap"><small>' + esc(ui('lect.mech')) + ' · ' + esc(first.n) + '</small><b>' + esc(t(first.title)) + '</b><small>' + esc(fmtDur(first.min)) + '</small></span></a>' +
       '</div></section>';
   };
@@ -818,12 +820,19 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden && lect.ctl) flushNow('beacon'); });
   window.addEventListener('pagehide', function () { if (lect.ctl) flushNow('beacon'); });
   /* a portrait that fails to load falls back to the initials badge */
+  function ytFallback(img) { /* cover chain: maxresdefault -> hqdefault -> nothing (the dark poster stays) */
+    var id = img.getAttribute('data-yt');
+    if (img.getAttribute('data-step') !== 'hq') { img.setAttribute('data-step', 'hq'); img.src = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'; }
+    else if (img.parentNode) { img.parentNode.classList.remove('feature__play--cover'); img.parentNode.removeChild(img); }
+  }
   document.addEventListener('load', function (e) {
-    var img = e.target; /* a cover service answers with a 1-pixel image when it has no cover: show the tile instead */
+    var img = e.target;
+    if (img && img.tagName === 'IMG' && img.hasAttribute('data-yt') && img.naturalWidth <= 120) { ytFallback(img); return; } /* a cover service answers with a 1-pixel image when it has no cover: show the tile instead */
     if (img && img.tagName === 'IMG' && img.hasAttribute('data-cover') && img.naturalWidth < 40 && img.parentNode) img.parentNode.removeChild(img);
   }, true);
   document.addEventListener('error', function (e) {
     var img = e.target;
+    if (img && img.tagName === 'IMG' && img.hasAttribute('data-yt')) { ytFallback(img); return; }
     if (img && img.tagName === 'IMG' && img.hasAttribute('data-cover')) { if (img.parentNode) img.parentNode.removeChild(img); return; }
     if (!img || img.tagName !== 'IMG' || !img.hasAttribute('data-initials')) return;
     var sp = document.createElement('span');

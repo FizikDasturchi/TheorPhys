@@ -148,7 +148,7 @@ counted on each author's card.
 
 ## Light theme backdrop
 In the light theme the page sits on warm paper with a grid of spacetime bent by two masses (`js/bg.js`, drawn on a fixed canvas;
-the paper colours are the `--bg`, `--bg-art`, `--sunken`, `--line` tokens in `css/style.css`). The dark theme is unchanged.
+the paper colours are the `--bg`, `--bg-art`, `--sunken`, `--line` tokens in `css/style.css`). In the dark theme the same sheet is a deep-space field with a lensed star field and an ember glow around the heavy mass.
 With "reduce motion" switched on in the system, the picture is drawn once and does not move.
 
 ## Playlists on the Lectures page
@@ -160,3 +160,10 @@ If the topics cannot be read (private playlist, offline), the playlist falls bac
 
 ## Search in Books
 The search box finds Cyrillic and Latin spellings of the same word (`fold()` in `js/members.js`), in both directions.
+
+## Uploads
+Books are uploaded in the background: a small panel in the corner shows the progress even when the dialog is closed, the dialog
+closes by itself when every file is uploaded (it stays open if a file failed), and more files can be added while others upload.
+
+## Home page
+The card "Video lectures" shows the cover of the first lecture (from YouTube, with a fallback to the dark poster). With `embedVideos: false` no image is requested.

@@ -352,7 +352,31 @@
     paintUploads();
   }
   function mb(n) { return (n / 1048576).toFixed(1); }
+  /* A small panel in the corner that follows the uploads even when the dialog is closed. */
+  var dockTimer = 0;
+  function paintDock() {
+    var d = document.getElementById('upDock');
+    if (!UPQ.length) { if (d) d.remove(); return; }
+    if (!d) {
+      d = document.createElement('div'); d.id = 'upDock'; d.className = 'updock'; d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'polite');
+      document.body.appendChild(d);
+    }
+    var total = UPQ.length, ok = UPQ.filter(function (u) { return u.st === 'ok'; }).length, bad = UPQ.filter(function (u) { return u.st === 'err'; }).length;
+    var running = UPQ.some(function (u) { return u.st === 'run' || u.st === 'wait'; });
+    var size = 0, done = 0;
+    UPQ.forEach(function (u) { size += u.size || 1; done += u.st === 'ok' ? (u.size || 1) : Math.min(u.done || 0, u.size || 1); });
+    var pct = size ? Math.round(done / size * 100) : 100;
+    var head = running ? ui('m.up.run', { n: Math.min(total, ok + bad + 1), t: total }) + ' &middot; ' + pct + '%' : bad ? '&#9888; ' + esc(ui('m.up.err')) : '&#10003; ' + esc(ui('m.up.done'));
+    d.className = 'updock' + (bad && !running ? ' updock--bad' : '') + (!running && !bad ? ' updock--ok' : '');
+    d.innerHTML = '<div class="updock__row"><b>' + head + '</b>' +
+      '<button type="button" class="linkbtn" data-m="upopen">' + esc(ui('m.up.details')) + '</button>' +
+      (running ? '' : '<button type="button" class="updock__x" data-m="updock-x" aria-label="' + esc(ui('m.close')) + '">&times;</button>') + '</div>' +
+      '<div class="up__bar"><i style="width:' + (running ? pct : 100) + '%"' + (bad && !running ? ' class="bad"' : '') + '></i></div>';
+    clearTimeout(dockTimer);
+    if (!running && !bad) dockTimer = setTimeout(function () { var x = document.getElementById('upDock'); if (x && !UPQ.some(function (u) { return u.st === 'run' || u.st === 'wait'; })) { UPQ = []; x.remove(); } }, 7000);
+  }
   function paintUploads() {
+    paintDock();
     var el = $('#upList'); if (!el) return;
     el.innerHTML = UPQ.map(function (u) {
       var pct = u.size ? Math.round(u.done / u.size * 100) : 100;
@@ -388,6 +412,9 @@
       if (!u) {
         upRunning = false; uploading = false; fetchedOnce = false;
         var done = UPQ.filter(function (x) { return x.st === 'ok'; })[0];
+        paintDock();
+        /* everything uploaded: close the dialog by itself (it stays open when a file failed, so the error can be read) */
+        if (!UPQ.some(function (x) { return x.st === 'err'; }) && modalEl && $('#mUpForm', modalEl)) closeModal();
         if (done) { curSub = KEY[codeOf(done.cat)]; try { out.onSubject(curSub); } catch (e) { /* ignore */ } }
         refresh(); return;
       }
@@ -400,7 +427,7 @@
     if (!files.length) { showErr(ui('m.lib.pick')); return; }
     showErr('');
     var meta = { title: ($('#upTitle').value || '').trim(), author: ($('#upAuthor').value || '').trim(), cat: $('#upCat').value, one: files.length === 1 };
-    UPQ = files.map(function (f) { return { f: f, name: f.name, size: f.size, done: 0, st: 'wait', title: meta.title, author: meta.author, cat: meta.cat, one: meta.one }; });
+    UPQ = UPQ.filter(function (u) { return u.st === 'run' || u.st === 'wait'; }).concat(files.map(function (f) { return { f: f, name: f.name, size: f.size, done: 0, st: 'wait', title: meta.title, author: meta.author, cat: meta.cat, one: meta.one }; }));
     $('#upFiles').value = ''; paintUploads(); runUploads();
   }
   window.addEventListener('beforeunload', function (e) { if (uploading) { e.preventDefault(); e.returnValue = ''; } });
@@ -549,7 +576,8 @@
     if (act === 'close') { closeModal(); return; }
     if (act === 'signout') { closeModal(true); signOut(); return; }
     if (act === 'members') { membersBox(); return; }
-    if (act === 'upload') { uploadBox(); return; }
+    if (act === 'upload' || act === 'upopen') { uploadBox(); return; }
+    if (act === 'updock-x') { UPQ = UPQ.filter(function (u) { return u.st === 'run' || u.st === 'wait'; }); paintDock(); return; }
     if (act === 'addlist') { addListBox(); return; }
     if (act === 'addlink') { addLinkBox(); return; }
     if (act === 'retry') { fetchedOnce = false; dbState = 'idle'; refresh(); return; }
