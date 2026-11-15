@@ -5,6 +5,7 @@
   var CFG = window.SITE_CONFIG, D = window.SITE_DATA, I = window.SITE_I18N;
   var t = I.t, ui = I.ui;
   var SM = window.SiteMembers;
+  var SY = window.SiteYT;
 
   var ROUTES = ['home', 'people', 'research', 'publications', 'lectures', 'books', 'start', 'join'];
   var LANGS = [
@@ -62,13 +63,23 @@
   function countPapers(themeId) {
     return D.PUBLICATIONS.filter(function (p) { return p.themes.indexOf(themeId) >= 0; }).length;
   }
-  function lectureById(id) { return allLectures().filter(function (x) { return x.id === id; })[0]; }
+  var ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+  /* A video of a members' playlist, shaped like a course lecture, so the player treats both the same way. */
+  function plVideo(id) {
+    var v = SY && SY.video(id);
+    if (!v) return null;
+    var m = SM && SM.listByPl ? SM.listByPl(v.pl) : null;
+    var min = v.s ? Math.max(1, Math.round(v.s / 60)) : 0;
+    return { id: v.id, n: v.count <= 20 ? ROMAN[v.i] : String(v.i + 1), title: v.t || (ui('m.pl.kindVideo') + ' ' + (v.i + 1)), min: min,
+      sub: (m ? m.title : '') + (m && min ? ' · ' : '') + (min ? fmtDur(min) : '') };
+  }
+  function lectureById(id) { return allLectures().filter(function (x) { return x.id === id; })[0] || plVideo(id); }
   function nextLecture(id) {
     for (var i = 0; i < D.COURSES.length; i++) {
       var ls = D.COURSES[i].lectures;
       for (var j = 0; j < ls.length; j++) if (ls[j].id === id) return ls[j + 1] || null;
     }
-    return null;
+    return SY ? SY.next(id) : null; /* the next topic of a members' playlist */
   }
   function embedOn() { return CFG.embedVideos !== false && !!(window.SitePlayer && window.SitePlayer.ok); }
   function fmtClock(sec) {
@@ -335,9 +346,26 @@
   };
 
   /* ---------- lectures: course lectures and members' playlists ---------- */
+  /* The topics of a members' playlist, drawn exactly like the lectures of a course. */
+  function plRows(items, curVid) {
+    var embed = embedOn(), roman = items.length <= 20;
+    return items.map(function (v, i) {
+      var n = roman ? ROMAN[i] : String(i + 1);
+      var title = v.t || (ui('m.pl.kindVideo') + ' ' + (i + 1));
+      var min = v.s ? Math.max(1, Math.round(v.s / 60)) : 0;
+      var inner = '<span class="lec__n">' + esc(n) + '</span><span class="lec__t"><b>' + esc(title) + '</b></span><span class="lec__d">' + esc(min ? fmtDur(min) : '') + '</span>';
+      if (embed) {
+        return '<li><button type="button" class="lec" data-play="' + esc(v.id) + '" data-key="v:' + esc(v.id) + '" data-min="' + min + '"' + (min ? '' : ' data-learn="1"') + (curVid === v.id ? ' aria-current="true"' : '') + '>' + inner + '<span class="lec__bar" aria-hidden="true"></span></button></li>';
+      }
+      return '<li><a class="lec" data-last="v:' + esc(v.id) + '" href="' + esc(ytWatch(v.id)) + '" target="_blank" rel="noopener noreferrer">' + inner + '<span class="lec__go">' + ICON.ext + '</span></a></li>';
+    }).join('');
+  }
+  function membersHtml() {
+    return SM && SM.signedIn() ? SM.playlistsHtml(embedOn(), state.mlist, state.mlist ? '' : state.play, plRows) : '';
+  }
   function currentLecture() {
     var all = allLectures();
-    return all.filter(function (x) { return x.id === state.play; })[0] || all[0];
+    return all.filter(function (x) { return x.id === state.play; })[0] || plVideo(state.play) || all[0];
   }
   /* The item shown in the player: a course lecture ('lec') or a members' video/playlist ('mem'). */
   function curItem() {
@@ -351,7 +379,7 @@
       state.mlist = null;
     }
     var l = currentLecture();
-    return { kind: 'lec', id: l.id, key: 'v:' + l.id, title: l.n + '. ' + t(l.title), sub: fmtDur(l.min), video: l.id, list: null, isList: false, watch: ytWatch(l.id) };
+    return { kind: 'lec', id: l.id, key: 'v:' + l.id, title: l.n + '. ' + t(l.title), sub: l.sub != null ? l.sub : fmtDur(l.min), video: l.id, list: null, isList: false, watch: ytWatch(l.id) };
   }
   function startSpec(it) {
     var r = PROG[it.key], fresh = !r || r.done;
@@ -387,6 +415,10 @@
       b.style.setProperty('--p', (!r ? 0 : r.done ? 100 : Math.min(99, Math.round(r.t / total * 100))) + '%');
       b.classList.toggle('lec--done', !!(r && r.done));
       b.classList.toggle('lec--part', part);
+      if (b.hasAttribute('data-learn')) {
+        var ld = b.querySelector('.lec__d');
+        if (ld && !ld.textContent && r && r.d > 0) ld.textContent = fmtDur(Math.max(1, Math.round(r.d / 60)));
+      }
       if (b.hasAttribute('data-mplay')) {
         var d = b.querySelector('.lec__d');
         if (d) d.textContent = part ? (b.getAttribute('data-list') === '1' ? '#' + (r.i + 1) + ' · ' : '') + fmtClock(r.t) : (r && r.done ? '✓' : '');
@@ -512,7 +544,7 @@
       }).join('');
       return '<section class="course" id="course-' + c.id + '"><h2>' + esc(ui(c.title)) + '</h2><p>' + esc(ui(c.text)) + '</p><ol class="lecs">' + items + '</ol></section>';
     }).join('');
-    var members = SM && SM.signedIn() ? SM.playlistsHtml(embed, state.mlist) : '';
+    var members = membersHtml();
     var notes = D.BOOKS.filter(function (b) { return b.free && (b.pdf || b.url) && b.cat !== 'bh'; });
     var notesHtml = notes.map(function (b) {
       return '<li>' + ext(b.pdf || b.url, esc(b.title)) + '<small>' + esc(b.authors) + (b.pdf ? ' · PDF' : '') + '</small></li>';
@@ -630,8 +662,9 @@
 
   pages.start = function () {
     var steps = D.STEPS.map(function (s, i) {
-      var books = s.books.map(function (id) { var b = bookById(id); return b ? '<li>' + (b.pdf ? ext(b.pdf, esc(b.title)) : esc(b.title)) + '<small>' + esc(b.authors) + '</small></li>' : ''; }).join('');
+      var books = s.books.map(function (id) { var b = bookById(id); return b ? '<li>' + (isFreeBook(b) ? ext(b.pdf || b.url, esc(b.title)) : esc(b.title)) + '<small>' + esc(b.authors) + '</small></li>' : ''; }).join('');
       var action = s.course ? '<a class="btn btn--sm" href="#lectures" data-scroll="course-' + s.course + '">' + esc(ui('start.watch')) + '</a>' : '';
+      if (!action && s.booksTab) action = '<a class="btn btn--sm" href="#books" data-book-tab="' + s.booksTab + '" data-book-web="1">' + esc(ui('nav.books')) + '</a>';
       if (s.research) action = '<a class="btn btn--sm" href="#research">' + esc(ui('nav.research')) + '</a>';
       return '<li class="step"><span class="step__n" aria-hidden="true">' + (i + 1) + '</span><div class="step__body"><h3><span class="sr">' + esc(ui('start.step')) + ' ' + (i + 1) + '. </span>' + esc(t(s.title)) + '</h3><p>' + esc(t(s.text)) + '</p>' +
         '<h4>' + esc(ui('start.books')) + '</h4><ul class="plain plain--books">' + books + '</ul>' + (action ? '<p>' + action + '</p>' : '') + '</div></li>';
@@ -745,6 +778,7 @@
     }
     if (el.hasAttribute('data-book-tab')) {
       state.booksTab = el.getAttribute('data-book-tab');
+      if (el.hasAttribute('data-book-web')) state.booksMode = 'web'; /* the start page links to the free books of the subject */
       if (SM && SM.setSearch) SM.setSearch('');
       repaintBooks(); return;
     }
@@ -836,7 +870,7 @@
         if (why === 'data') { /* refresh in place so a playing video is not interrupted */
           if (state.route === 'lectures' && lect.ctl) {
             var sec = $('#course-members');
-            if (sec) { sec.outerHTML = SM.playlistsHtml(embedOn(), state.mlist); paintAll(); return; }
+            if (sec) { sec.outerHTML = membersHtml(); paintAll(); return; }
           }
           if (state.route === 'books' && $('#booksPane')) {
             var ae = document.activeElement;
@@ -846,9 +880,17 @@
         }
         renderAll(false);
       };
+      if (SY) SY.onUpdate = function () { /* a playlist finished loading its topics */
+        if (state.route !== 'lectures') return;
+        var started = lect.ctl && lect.ctl.time && lect.ctl.time() > 1;
+        if (!state.picked && !started && state.wantKey && applyLast(state.wantKey)) { state.wantKey = null; renderAll(false); return; }
+        var sec = $('#course-members');
+        if (sec) { sec.outerHTML = membersHtml(); paintAll(); }
+      };
       SM.out.onSubject = function (k) { state.booksTab = k; }; /* after adding a file or link, show the subject it went into */
       SM.out.onSignOut = function () { PROG = {}; SYNC = {}; store('vp', '{}'); store('last', ''); state.mlist = null; state.wantKey = null; state.picked = false; };
       SM.out.onData = function () { /* progress saved on the server wins over this browser's copy */
+        if (SY && SM.lists) SM.lists().forEach(function (x) { if (String(x.pl).indexOf('v:') !== 0) SY.cached(x.pl); }); /* playlist topics from the browser's copy first, so "last watched" can resolve */
         var sp = SM.serverProg();
         Object.keys(sp).forEach(function (k) {
           var l = PROG[k];

@@ -31,6 +31,8 @@
     cv = document.createElement('canvas');
     cv.id = 'spacetime';
     cv.setAttribute('aria-hidden', 'true');
+    /* inline, so a stale cached style.css can never let the canvas push the page around */
+    cv.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;z-index:-1;pointer-events:none;display:block;';
     ctx = cv.getContext && cv.getContext('2d');
     if (!ctx) { cv = null; return false; }
     document.body.insertBefore(cv, document.body.firstChild);
@@ -130,9 +132,13 @@
     }
   }
 
+  function cssReady() { /* the new style.css defines --bg-art; an old cached one does not */
+    try { return !!window.getComputedStyle(root).getPropertyValue('--bg-art').trim(); } catch (e) { return false; }
+  }
   function sync() {
-    var on = isLight();
+    var on = isLight() && cssReady();
     if (on && !cv && !setup()) on = false;
+    if (cv) cv.style.display = on ? 'block' : 'none';
     if (on) { root.setAttribute('data-spacetime', 'on'); resize(); if (!raf) raf = window.requestAnimationFrame(frame); }
     else { root.removeAttribute('data-spacetime'); if (raf) { window.cancelAnimationFrame(raf); raf = 0; } }
   }
