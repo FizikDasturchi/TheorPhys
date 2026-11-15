@@ -173,7 +173,7 @@
         (n.link ? ext(n.link, 'DOI', 'inline') : '') + '</article>';
     }).join('');
     return '' +
-      '<div class="herobox"><section class="hero" aria-labelledby="h-title"><div class="wrap hero__grid">' +
+      '<section class="hero" aria-labelledby="h-title"><div class="wrap hero__grid">' +
         '<div class="hero__text">' +
           '<p class="eyebrow">' + esc(ui('hero.eyebrow')) + '</p>' +
           '<h1 id="h-title">' + esc(ui('hero.title')) + '</h1>' +
@@ -185,8 +185,9 @@
           '<label class="incl" for="bhAngle"><span>' + esc(ui('hero.incl')) + '</span><input id="bhAngle" type="range" min="5" max="88" value="78" step="1"><output id="bhOut" for="bhAngle">78°</output></label>' +
           '<figcaption>' + esc(ui('hero.caption')) + '</figcaption>' +
         '</figure>' +
-      '</div></section>' + band() + '</div>' +
+      '</div></section>' +
 
+      band() +
       '<section class="wrap"><div class="stats" aria-label=""' + esc(ui('nav.brand')) + '">' +
         '<div><b>50+</b><span>' + esc(ui('stats.members')) + '</span></div>' +
         '<div><b>' + D.THEMES.length + '</b><span>' + esc(ui('stats.themes')) + '</span></div>' +

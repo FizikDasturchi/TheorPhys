@@ -51,7 +51,7 @@
     'langLabel': L('Language', 'Язык', 'Til'),
     'external': L('(opens in a new tab)', '(откроется в новой вкладке)', '(yangi oynada ochiladi)'),
 
-    'nav.brand': L('Research Group Theoretical Physics', 'Научная группа по теоретической физике', 'Nazariy fizika ilmiy guruhi'),
+    'nav.brand': L('Research Group Theoretical Physics', 'Исследовательская группа по теоретической физике', 'Nazariy fizika tadqiqot guruhi'),
     'nav.brandShort': L('Research Group Theoretical Physics', 'Теоретическая физика', 'Nazariy fizika'),
     'nav.sub': L('Black holes & gravity', 'Чёрные дыры и гравитация', 'Qora tuynuklar va gravitatsiya'),
     'nav.home': L('Home', 'Главная', 'Bosh sahifa'),
@@ -63,7 +63,7 @@
     'nav.start': L('Start here', 'Новичкам', 'Yangilar uchun'),
     'nav.join': L('Join us', 'Вступить', "Qo'shilish"),
 
-    'hero.eyebrow': L('Theoretical physics research group', 'Научная группа по теоретической физике', 'Nazariy fizika ilmiy guruhi'),
+    'hero.eyebrow': L('Theoretical physics research group', 'Исследовательская группа по теоретической физике', 'Nazariy fizika tadqiqot guruhi'),
     'hero.title': L('Black holes, light and spacetime', 'Чёрные дыры, свет и пространство-время', "Qora tuynuklar, yorug'lik va fazo-vaqt"),
     'hero.lead': L(
       'More than fifty students and researchers work on general relativity: gravitational lensing, black hole shadows, the motion of particles and spinning particles, and perturbations of compact objects.',
@@ -392,8 +392,8 @@
 
     'footer.text': L(
       'Theoretical physics research group. Content last updated {date}.',
-      'Научная группа по теоретической физике. Содержимое обновлено {date}.',
-      "Nazariy fizika ilmiy guruhi. Mazmun {date} da yangilangan."),
+      'Исследовательская группа по теоретической физике. Содержимое обновлено {date}.',
+      "Nazariy fizika tadqiqot guruhi. Mazmun {date} da yangilangan."),
     'footer.law': L(
       'Uzbek text follows the Latin alphabet revised by the law signed on 21 October 2026, in force from 22 April 2027.',
       'Узбекский текст набран латиницей в редакции закона, подписанного 21 октября 2026 года (вступает в силу 22 апреля 2027 года).',
