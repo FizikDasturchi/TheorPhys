@@ -5,7 +5,7 @@
   --bg-art:
     radial-gradient(900px 560px at 90% -6%, rgba(242, 145, 90, 0.26), transparent 62%),
     radial-gradient(820px 700px at -8% 106%, rgba(35, 66, 196, 0.12), transparent 60%),
-    linear-gradient(180deg, #faf6ec 0%, #f3ecdc 50%);
+    linear-gradient(180deg, #faf6ec 0%, #f3ecdc 100%);
   --surface: #ffffff;
   --sunken: #efe8d9;
   --hover: #f5efe2;
@@ -17,7 +17,7 @@
   --hot: #c2410c;
   --focus: #2342c4;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 3px 10px rgba(15, 23, 42, 0.06);
-  --sky: radial-gradient(ellipse closest-side at 50% 50%, #04060d 0%, #080d1c 46%, rgba(10, 16, 36, 0.92) 58%, rgba(10, 16, 36, 0) 100%);
+  --sky: radial-gradient(ellipse closest-side at 50% 50%, #04060d 0%, #080d1c 38%, rgba(10, 16, 36, 0.88) 55%, rgba(10, 16, 36, 0.5) 74%, rgba(10, 16, 36, 0.18) 90%, rgba(10, 16, 36, 0) 100%);
   --space: #05070d;
   --space-line: #1a2133;
   --space-text: #eef1f8;
@@ -171,13 +171,13 @@ ul.tags { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* hero */
 .hero { background: transparent; color: var(--text); border-bottom: 1px solid var(--line); }
-.hero__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px); gap: 32px; align-items: center; padding-top: 40px; padding-bottom: 32px; }
+.hero__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 640px); gap: 32px; align-items: center; padding-top: 40px; padding-bottom: 32px; }
 .eyebrow { font: 500 0.78rem/1.3 var(--mono); letter-spacing: 0.04em; color: var(--hot); margin: 0 0 14px; }
 .hero h1 { font-size: clamp(2.2rem, 4.6vw, 3.6rem); letter-spacing: -0.02em; color: var(--text); margin: 0 0 16px; }
 .hero__lead { color: var(--muted); font-size: 1.08rem; max-width: 52ch; margin-bottom: 24px; }
 .cta { display: flex; flex-wrap: wrap; gap: 10px; }
 .hero__fig { margin: 0; }
-.bhwrap { position: relative; aspect-ratio: 6 / 5; width: 100%; background: var(--sky); -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 56%, transparent 71%); mask-image: radial-gradient(ellipse at 50% 50%, #000 56%, transparent 71%); }
+.bhwrap { position: relative; aspect-ratio: 3 / 2; width: 100%; background: var(--sky); -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 68%, transparent 100%); mask-image: radial-gradient(ellipse at 50% 50%, #000 68%, transparent 100%); }
 .bhwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: ns-resize; touch-action: pan-y; background: transparent; }
 .bhwrap canvas.dragging { cursor: grabbing; }
 .bhfallback { display: none; position: absolute; inset: 0; }
