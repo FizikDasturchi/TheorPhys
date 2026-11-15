@@ -172,7 +172,7 @@
       gl.uniform2f(uRes, canvas.width, canvas.height);
       gl.uniform1f(uTime, reduce ? 2.0 : (now - t0) / 1000);
       gl.uniform1f(uEl, (90 - incl) * Math.PI / 180);
-      gl.uniform1f(uDark, isDark() ? 1.0 : 0.0);
+      gl.uniform1f(uDark, 1.0); /* stars show on the dark sky patch in both themes */
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 

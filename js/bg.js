@@ -63,7 +63,10 @@
     if (!cv) return;
     var light = isLight(), sc = window.pageYOffset || 0, calm = reduce();
     var u = Math.min(W, H), tt = calm ? 0 : now / 1000;
-    var big = { x: W * 0.84 + Math.sin(tt * 0.11) * 14, y: H * 0.34 + Math.cos(tt * 0.09) * 10 - Math.min(sc, 600) * 0.05, a: 0.62, s: u * 0.2 };
+    /* on the home page the heavy mass sits exactly behind the hero black hole, so there is only one black hole */
+    var hb = document.getElementById('bh'), hr = null;
+    if (hb) { var rc = hb.getBoundingClientRect(); if (rc.width > 0 && rc.bottom > -300 && rc.top < H + 300) hr = rc; }
+    var big = hr ? { x: hr.left + hr.width / 2, y: hr.top + hr.height / 2, a: 0.62, s: u * 0.2 } : { x: W * 0.84 + Math.sin(tt * 0.11) * 14, y: H * 0.34 + Math.cos(tt * 0.09) * 10 - Math.min(sc, 600) * 0.05, a: 0.62, s: u * 0.2 };
     var idle = (now - ptr.t) > 5000 || calm;
     var tx = idle ? big.x + Math.cos(tt * 0.32) * u * 0.36 : ptr.x, ty = idle ? big.y + Math.sin(tt * 0.32) * u * 0.2 : ptr.y;
     ptr.ax += (tx - ptr.ax) * 0.06; ptr.ay += (ty - ptr.ay) * 0.06;
@@ -120,21 +123,25 @@
     }
     ctx.setLineDash([]);
     if (light) {
-      ctx.strokeStyle = 'rgba(194,65,12,0.7)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(big.x, big.y, 17, 0, 6.2832); ctx.stroke();
-      ctx.fillStyle = 'rgba(11,16,32,0.88)';
-      ctx.beginPath(); ctx.arc(big.x, big.y, 11, 0, 6.2832); ctx.fill();
+      if (!hr) {
+        ctx.strokeStyle = 'rgba(194,65,12,0.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(big.x, big.y, 17, 0, 6.2832); ctx.stroke();
+        ctx.fillStyle = 'rgba(11,16,32,0.88)';
+        ctx.beginPath(); ctx.arc(big.x, big.y, 11, 0, 6.2832); ctx.fill();
+      }
       ctx.fillStyle = 'rgba(194,65,12,0.55)';
       ctx.beginPath(); ctx.arc(small.x, small.y, 3, 0, 6.2832); ctx.fill();
     } else {
       /* a thin lensed ring with a hot spot, around a true-black shadow */
-      g = ctx.createRadialGradient(big.x, big.y, 10, big.x, big.y, 30);
-      g.addColorStop(0, 'rgba(255,190,120,0)'); g.addColorStop(0.55, 'rgba(255,190,120,0.55)'); g.addColorStop(1, 'rgba(255,190,120,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(big.x, big.y, 30, 0, 6.2832); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,214,160,0.8)'; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.arc(big.x, big.y, 17, 0, 6.2832); ctx.stroke();
-      ctx.fillStyle = '#02030a';
-      ctx.beginPath(); ctx.arc(big.x, big.y, 14, 0, 6.2832); ctx.fill();
+      if (!hr) {
+        g = ctx.createRadialGradient(big.x, big.y, 10, big.x, big.y, 30);
+        g.addColorStop(0, 'rgba(255,190,120,0)'); g.addColorStop(0.55, 'rgba(255,190,120,0.55)'); g.addColorStop(1, 'rgba(255,190,120,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(big.x, big.y, 30, 0, 6.2832); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,214,160,0.8)'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(big.x, big.y, 17, 0, 6.2832); ctx.stroke();
+        ctx.fillStyle = '#02030a';
+        ctx.beginPath(); ctx.arc(big.x, big.y, 14, 0, 6.2832); ctx.fill();
+      }
       g = ctx.createRadialGradient(small.x, small.y, 0, small.x, small.y, 14);
       g.addColorStop(0, 'rgba(190,210,255,0.55)'); g.addColorStop(1, 'rgba(190,210,255,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(small.x, small.y, 14, 0, 6.2832); ctx.fill();
