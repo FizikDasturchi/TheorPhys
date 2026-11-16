@@ -154,7 +154,7 @@
       links: [
         { label: 'ORCID', url: 'https://orcid.org/0000-0002-6686-3787' },
         { label: 'INSPIRE-HEP', url: 'https://inspirehep.net/literature?q=a%20Abdujabbarov' },
-        { label: 'Google Scholar', url: 'https://scholar.google.com/scholar?q=author%3A%22A+Abdujabbarov%22' }
+        { label: 'Google Scholar', url: 'https://scholar.google.com/citations?user=YjhKvPoAAAAJ&hl=en' }
       ],
       email: 'ahmadjon@astrin.uz'
     },
@@ -173,7 +173,7 @@
         "Plazmada qora tuynuk soyasi hamda kuchsiz va kuchli linzalanish; kvant tuzatmali va modifikatsiyalangan gravitatsiyadagi qora tuynuklar; fotonlar harakati va og'ish burchaklari."),
       links: [
         { label: 'INSPIRE-HEP', url: 'https://inspirehep.net/literature?q=a%20Atamurotov' },
-        { label: 'Google Scholar', url: 'https://scholar.google.com/scholar?q=author%3A%22F+Atamurotov%22' }
+        { label: 'Google Scholar', url: 'https://scholar.google.com/citations?user=7-XPshgAAAAJ&hl=ru' }
       ]
     }
   ];

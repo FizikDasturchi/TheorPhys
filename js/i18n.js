@@ -178,6 +178,7 @@
     'pubs.profiles': L('Complete publication lists', 'Полные списки публикаций', "To'liq nashrlar ro'yxati"),
     'pubs.orcid': L('ORCID profile', 'Профиль ORCID', 'ORCID profili'),
     'pubs.inspire': L('INSPIRE-HEP search', 'Поиск в INSPIRE-HEP', "INSPIRE-HEP'da qidirish"),
+    'pubs.scholarProfile': L('Google Scholar profile', 'Профиль Google Scholar', "Google Scholar profili"),
     'pubs.scholar': L('Google Scholar search', 'Поиск в Google Scholar', "Google Scholar'da qidirish"),
 
     'lect.title': L('Lectures', 'Лекции', "Ma'ruzalar"),

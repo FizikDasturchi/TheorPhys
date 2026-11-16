@@ -336,7 +336,7 @@
     var prof = D.LEADERS.map(function (p) {
       return '<div class="prof"><b>' + esc(t(p.name)) + '</b><ul class="linklist">' +
         p.links.map(function (l) {
-          var lab = l.label === 'ORCID' ? ui('pubs.orcid') : l.label === 'INSPIRE-HEP' ? ui('pubs.inspire') : ui('pubs.scholar');
+          var lab = l.label === 'ORCID' ? ui('pubs.orcid') : l.label === 'INSPIRE-HEP' ? ui('pubs.inspire') : l.url.indexOf('/citations?') >= 0 ? ui('pubs.scholarProfile') : ui('pubs.scholar');
           return '<li>' + ext(l.url, esc(lab)) + '</li>';
         }).join('') + '</ul></div>';
     }).join('');
@@ -633,7 +633,7 @@
     var shelf = function (key, items) {
       return items.length ? '<section class="shelf"><h3 class="shelf__h">' + esc(ui(key)) + '</h3>' + (key === 'books.sec.copy' ? '<p class="books__legal">' + esc(ui('books.listNote')) + '</p>' : '') + '<ul class="books">' + items.map(bookItem).join('') + '</ul></section>' : '';
     };
-    return '<p class="books__legal">' + esc(ui('books.webNote')) + '</p>' + featured + math + shelf('books.sec.free', free) + shelf('books.sec.copy', paid) + (SM && SM.enabled ? SM.webHtml() : '');
+    return '<p class="books__legal">' + esc(ui('books.webNote')) + '</p>' + (SM && SM.enabled ? SM.webHtml() : '') + featured + math + shelf('books.sec.free', free) + shelf('books.sec.copy', paid);
   }
   function booksPane() { return state.booksMode === 'web' ? webPane() : groupPane(); }
   function booksModes() {
