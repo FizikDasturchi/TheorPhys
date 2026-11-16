@@ -144,10 +144,8 @@
       role: 'lead',
       photo: 'img/abdujabbarov.jpg',
       affil: [
-        'Ulugh Beg Astronomical Institute, Uzbekistan Academy of Sciences, Tashkent',
-        'National University of Uzbekistan, Tashkent',
-        'School of Physics, Harbin Institute of Technology, China',
-        'L.N. Gumilyov Eurasian National University, Astana, Kazakhstan'
+        'Institute of Fundamental and Applied Research, TIIAME National Research University',
+        'School of Physics, Harbin Institute of Technology, China'
       ],
       interests: L(
         'Black hole shadows and gravitational lensing; motion of particles around compact objects; plasma and magnetic-field effects; testing gravity theories with black hole images.',
@@ -167,9 +165,7 @@
       role: 'co',
       photo: 'img/atamurotov.jpg',
       affil: [
-        'Kimyo International University in Tashkent',
-        'University of Tashkent for Applied Sciences',
-        'Research Center of Astrophysics and Cosmology, Khazar University, Baku'
+        'Inha University in Tashkent'
       ],
       interests: L(
         'Black hole shadows and weak and strong lensing in plasma; quantum-corrected and modified-gravity black holes; photon motion and deflection angles.',
@@ -201,7 +197,7 @@
       name: L('Akbar Davlataliyev', 'Акбар Давлаталиев', 'Akbar Davlataliyev'),
       links: [{ label: 'Scopus', url: 'https://www.scopus.com/authid/detail.uri?authorId=58635557800' }] },
     { key: 'Z. Turakhonov', level: 'phd',
-      name: L('Ziyodulla Turakhanov', 'Зиёдулла Турахонов', 'Ziyodulla Turakhanov'),
+      name: L('Ziyodulla Turakhonov', 'Зиёдулла Турахонов', 'Ziyodulla Turakhonov'),
       links: [{ label: 'Scopus', url: 'https://www.scopus.com/authid/detail.uri?authorId=59296226700' }] },
     { key: 'H. Alibekov', level: 'phd',
       name: L('Khusan Alibekov', 'Хусан Алибеков', 'Khusan Alibekov'),
@@ -213,7 +209,8 @@
       name: L('Shahzod Orzuyev', 'Шахзод Орзуев', 'Shahzod Orzuyev'),
       links: [{ label: 'Scopus', url: 'https://www.scopus.com/authid/detail.uri?authorId=58513958900' }] },
     { key: 'P. Yovkochev', level: 'doc',
-      name: L('Pahlavon Yovqochev', 'Пахлавон Ёвкочев', 'Pahlavon Yovqochev'), },
+      name: L('Pakhlavon Yovkochev', 'Пахлавон Ёвкочев', 'Pahlavon Yovqochev'),
+      links: [{ label: 'Scopus', url: 'https://www.scopus.com/authid/detail.uri?authorId=60584177200' }] },
     { key: 'D. Umarov', level: 'msc',
       name: L('Dilmurod Umarov', 'Дилмурод Умаров', 'Dilmurod Umarov'),
       links: [{ label: 'Scopus', url: 'https://www.scopus.com/authid/detail.uri?authorId=59699138900' }] },
