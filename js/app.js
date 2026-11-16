@@ -930,6 +930,7 @@
     if (last && !applyLast(last)) state.wantKey = last;
     if (SM) {
       SM.out.onChange = function (why) {
+        if (why === 'data') { var ab = document.querySelector('.tools .acct'); if (ab && SM.accountButton) { var tmp = document.createElement('div'); tmp.innerHTML = SM.accountButton(); if (tmp.firstChild) ab.replaceWith(tmp.firstChild); } } /* the "someone is waiting" dot follows the data, even when the page itself is refreshed in place */
         if (why === 'data' && state.restored) { state.restored = false; if (state.route === 'lectures') { renderAll(false); return; } }
         if (why === 'data') { /* refresh in place so a playing video is not interrupted */
           if (state.route === 'lectures' && lect.ctl) {
@@ -972,7 +973,7 @@
       };
     }
     renderAll(false);
-    if (SM && SM.signedIn() && (state.route === 'lectures' || state.route === 'books')) SM.ensureData();
+    if (SM && SM.signedIn() && (state.route === 'lectures' || state.route === 'books' || SM.user().role === 'admin')) SM.ensureData(); /* admins get the "waiting" dot on any page */
   }
 
   init();

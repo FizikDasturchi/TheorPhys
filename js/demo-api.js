@@ -74,8 +74,9 @@
       case 'data':
         return {
           role: user.role,
-          books: team ? db.Books.map(function (b) { return { id: b.id, title: b.title, author: b.author, fileId: b.fileId, by: b.by, mine: admin || b.by === user.name }; }) : [],
-          lists: db.Lists.filter(function (l) { return team || String(l.pl).indexOf('u:') !== 0; }).map(function (l) { return { id: l.id, title: l.title, pl: l.pl, by: l.by, mine: team && (admin || l.by === user.name) }; }),
+          waiting: admin ? db.Users.filter(function (x) { return x.role === 'ask'; }).length : 0,
+          books: db.Books.map(function (b) { return { id: b.id, title: b.title, author: b.author, fileId: b.fileId, by: b.by, mine: team && (admin || b.by === user.name) }; }),
+          lists: db.Lists.map(function (l) { return { id: l.id, title: l.title, pl: l.pl, by: l.by, mine: team && (admin || l.by === user.name) }; }),
           prog: db.Prog.filter(function (p) { return p.key === user.key; }).map(function (p) { return { pl: p.pl, i: p.i, t: p.t }; })
         };
       case 'upStart':
@@ -111,14 +112,18 @@
         if (String(q.pass).length < 6) throw 'Parol kamida 6 belgi';
         r.salt = uid(); r.hash = hs(q.pass, r.salt); dirty = true; return done({ ok: 1 });
       }
-      case 'users': must(); return { users: db.Users.map(function (x) { return { name: x.name, role: x.role }; }) };
+      case 'askJoin':
+        if (team) return { ok: 1 };
+        if (user.role === 'member') user.role = 'ask';
+        user.note = String(q.note || '').trim().slice(0, 200); dirty = true; return done({ ok: 1 });
+      case 'users': must(); return { users: db.Users.map(function (x) { return { name: x.name, role: x.role, note: x.role === 'ask' ? (x.note || '') : '' }; }) };
       case 'setRole': {
         must(); var kk = norm(q.name);
         if (kk === user.key) throw "O'z rolingizni o'zgartira olmaysiz";
         if (q.role !== 'team' && q.role !== 'member') throw "Noto'g'ri rol";
         var t = db.Users.filter(function (x) { return x.key === kk; })[0]; if (!t) throw "A'zo topilmadi";
         if (t.role === 'admin') throw "Ruxsat yo'q";
-        t.role = q.role; dirty = true; return done({ ok: 1 });
+        t.role = q.role; delete t.note; dirty = true; return done({ ok: 1 });
       }
       case 'delUser': {
         must(); var dk = norm(q.name);

@@ -718,3 +718,21 @@ html.theme-fade, html.theme-fade * { transition: background-color .45s ease, col
   @keyframes mPop { from { opacity: 0; transform: translateY(16px) scale(0.94); } to { opacity: 1; transform: none; } }
   @keyframes mPopOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(0.96); } }
 }
+
+/* ---------- guests, join requests and the admin approval box ---------- */
+.joinline { margin: 8px 0 0; line-height: 1.5; }
+.joinline .linkbtn { font-size: inherit; }
+.hint.rights { margin: 2px 0 0; padding: 8px 10px; border-left: 3px solid var(--hot); background: var(--sunken); border-radius: 0 6px 6px 0; color: var(--muted); }
+.acct__dot { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--hot); border: 2px solid var(--bg, var(--surface)); box-sizing: content-box; pointer-events: none; }
+.count { display: inline-block; min-width: 18px; margin-left: 6px; padding: 3px 6px; border-radius: 999px; background: var(--hot); color: var(--accent-ink); font: 600 0.7rem/1 var(--mono); text-align: center; vertical-align: 1px; }
+.tick { color: var(--accent); font-weight: 700; margin-left: 4px; cursor: help; }
+.mlist > .sub { margin: 18px 0 6px; display: flex; align-items: baseline; gap: 8px; }
+.mlist > .sub:first-child { margin-top: 0; }
+.mlist > .sub small { font: 600 0.72rem/1 var(--mono); color: var(--muted); padding: 3px 7px; border-radius: 999px; background: var(--sunken); }
+.mlist > .sub + .mlist__row { border-top: 0; }
+.mlist > .sub + .muted { margin: 4px 0 0; }
+.mlist__who { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 200px; }
+.mlist__who small { color: var(--muted); font-size: 0.84rem; overflow-wrap: anywhere; }
+.mlist__row--ask { background: var(--sunken); border-radius: 8px; padding: 10px 12px; margin: 4px 0; border-top: 0; }
+.btn--ok { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn--ok:hover { filter: brightness(1.08); border-color: var(--accent); color: var(--accent-ink); }

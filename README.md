@@ -11,28 +11,39 @@ Upload the whole folder to any web host. To test on your computer, use a local w
 
 ## Sign-in and members-only pages
 The site has real accounts (first name + last name + password). It talks to the same Google Apps Script
-backend as the AstroPhysics site, so accounts, shared books and playlists are the same on both sites.
+backend as the AstroPhysics site, so accounts, shared books and playlists are the same on both sites. The newest `code.gs` (with the `ask` role and the `askJoin` action) must be deployed as a new version for the approval flow to work. If the other site shares this backend, check it still works after the update (it does not know the new `ask` role).
 `js/config.js` already holds that backend's address (`members.api`).
 
 Roles (the backend enforces them, the pages only follow):
 
 | Role | Who | What they get |
 |---|---|---|
-| visitor | not signed in | public pages; Lectures is locked |
-| registered (`member`) | anybody who signs up | Lectures unlocked: video courses, the group's playlists, "continue where you stopped". **No Books page** (not in the top bar, its address leads home), cannot upload files, cannot add playlists |
-| group member (`team`) | made by an admin | everything above, plus the **Books page** (group resources, search, download, upload, internet links) and adding / deleting their own YouTube videos and playlists |
-| admin | the two names in `ADMINS` | everything, can delete any file or playlist, and decide who is in the group |
+| visitor | not signed in | public pages; Lectures and the group's files are locked |
+| guest (`member`) | anybody who signs up | **Reads everything**: video courses, the group's playlists, the Books page, opens and downloads the group's files, sees the links members added. **Adds nothing**: no upload, no playlist, no link |
+| asked to join (`ask`) | a guest who pressed *Ask to join* (or filled the note at sign-up) | exactly the same as a guest, until an admin decides; sees "waiting for approval" |
+| group member (`team`) | approved by an admin | everything above, plus uploading files, adding links and adding / deleting their own YouTube videos and playlists |
+| admin | the names in `ADMINS` | everything, can delete any file or playlist, and approve or decline join requests |
 
-Admins open the account dialog (initial in the top bar) > Members: every registered person has a **Make member** button
-(becomes **Remove from group** afterwards). Admin rights themselves are only given in `ADMINS` inside `code.gs`.
-A role change shows on the person's next page load or refresh.
+### How someone becomes a group member (no codes)
+1. A new person signs up. The form has an optional line, "Are you in the group?": a professor or group member writes the
+   supervisor's name or a Scopus ID there. (Anybody who skipped it can press **Ask to join the group** later, on the Books or Lectures page or in the account dialog.)
+2. They can read everything straight away. Their account shows "waiting for approval".
+3. Admins see a small dot on the account button and a number on the **Members** button. In Members, the **Waiting for approval** box is at the top:
+   each request shows the name and the note, a tick when the name is on the People page, and **Approve** / **Decline**.
+   Only admins see this box, and the backend refuses everybody else.
+4. After **Approve** the person is a group member (on their next page load or refresh they get the upload and add buttons).
+   **Remove from group** (or **Make member** for someone who never asked) works at any time in the same list.
+
+The tick is only a hint for the admin, because the names on the People page are public. The decision is always the admin's.
+Upload, link and playlist dialogs remind everybody: "Only add material you have the right to share."
+Admin rights themselves are only given in `ADMINS` inside `code.gs` (add a professor there and run `tiklash` once if they should approve requests too; note that `tiklash` sets every listed admin's password back to the one written in the script).
 
 - progress ("continue where you stopped") is saved on the server for every signed-in account and follows them to another device;
 - account dialog: change password.
 
 Choose which pages need sign-in in `js/config.js`:
 
-    protect: ['lectures']      // add 'people', 'publications', ... or use [] to keep everything public (Books is separate: group members only)
+    protect: ['lectures']      // add 'people', 'publications', ... or use [] to keep everything public (the group's files inside Books always need sign-in)
 
 ### Setting up your own backend (only if you do not want to share the AstroPhysics one)
 1. Make a new Google Sheet, then Extensions > Apps Script. Paste your `code.gs` over the old code.
@@ -56,7 +67,8 @@ After you change `code.gs` later: Deploy > Manage deployments > Edit > New versi
 - The lecture list lives in `js/data.js`, so the YouTube video ids of the course lectures can be read by anyone who
   looks at the page source. The sign-in gate keeps casual visitors out; it does not hide the videos. Make the videos "unlisted" on YouTube,
   or keep them only in members' playlists, if they must stay private.
-- Files in the members' library are shared on Google Drive as "anyone with the link". Only signed-in members are shown the links.
+- Files in the members' library are shared on Google Drive as "anyone with the link". Only signed-in people are shown the links.
+- **Copyright:** because only approved group members can add files, videos and links, the group knows who put what on the site. The responsibility for what is shared stays with the group; remove anything you do not have the right to share (admins can delete any item).
 
 ## Lectures play inside the page
 On a normal web server the lectures play on the Lectures page, with:
@@ -75,7 +87,7 @@ The Books page opens with a **Subject** row: Vectors and tensors, Classical mech
 relativity, Quantum mechanics, Mathematical methods, Black holes and lensing. Under it are two options, which
 show whatever belongs to the chosen subject:
 
-**Group resources** are the files members uploaded. Any signed-in member can upload a book or notes under any of
+**Group resources** are the files group members uploaded. Any signed-in person can open and download them; only group members can upload a book or notes under any of
 the seven subjects (the dialog preselects the subject being viewed). Files are stored on the group's Google Drive.
 The search box looks in every subject, because a book may have been filed elsewhere. Older uploads that had no
 subject, or the old "Other" section, appear under an extra **Other** chip that is only shown when such files exist.
@@ -86,16 +98,15 @@ subject, or the old "Other" section, appear under an extra **Other** chip that i
 - *Textbooks: find a copy*: books under copyright (Landau, Jackson, Goldstein, Carroll's textbook, Bambi's book and so on).
   They are listed, not hosted, because a public website may not give away copyrighted books. Each has
   **Find in Group resources** (jumps to Group resources with the search filled in) and **Find a copy** (Open Library).
-- *Links from members*: any signed-in member can press **Add a link**, give the web address, an optional title and a
+- *Links from members*: any group member can press **Add a link**, give the web address, an optional title and a
   subject. Only `http://` and `https://` addresses are accepted. Members can delete their own links; admins can delete any.
 
 To add a curated book, copy an entry in `BOOKS` in `js/data.js` and set `cat` to `vt`, `mech`, `em`, `gr`, `qm`, `math` or `bh`.
 
 If the group wants a particular copyrighted book on the site (for example the Bambi PDF), upload it under Group
-resources, which only signed-in members can see.
+resources, which only signed-in people can see. (Only do this if the group has the right to share the file.)
 
-### How subjects and links are stored (backend)
-No change to `code.gs` is needed. A file's subject is the digit in front of its title: `0::` vectors and tensors,
+### How subjects and links are stored (backend) A file's subject is the digit in front of its title: `0::` vectors and tensors,
 `1::` mechanics, `2::` relativity, `3::` other (these four are what the older site used, so old files still sort),
 `4::` electrodynamics, `5::` quantum mechanics, `6::` mathematical methods, `7::` black holes and lensing.
 A member's link is saved with the existing `addList` action: the title is `<digit>::<title>` and the link is
