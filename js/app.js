@@ -8,6 +8,8 @@
   var SY = window.SiteYT;
 
   var ROUTES = ['home', 'people', 'research', 'publications', 'lectures', 'books', 'start', 'join'];
+  /* The Books page exists only for group members and admins: for everybody else it is not in the top bar and its address leads home. */
+  function routeOk(r) { return r !== 'books' || !SM || SM.canBooks(); }
   var FLAGS = {
     uz: '<svg class="flag" viewBox="0 0 30 20" aria-hidden="true" focusable="false"><rect width="30" height="20" fill="#1eb53a"/><rect width="30" height="6.2" fill="#0099b5"/><rect y="6.2" width="30" height="7.6" fill="#ce1126"/><rect y="6.9" width="30" height="6.2" fill="#fff"/><circle cx="5.6" cy="3.1" r="2.1" fill="#fff"/><circle cx="6.5" cy="3.1" r="1.8" fill="#0099b5"/><g fill="#fff"><circle cx="9.2" cy="1.8" r=".5"/><circle cx="11" cy="1.8" r=".5"/><circle cx="12.8" cy="1.8" r=".5"/><circle cx="10.1" cy="3.4" r=".5"/><circle cx="11.9" cy="3.4" r=".5"/><circle cx="11" cy="5" r=".5"/></g></svg>',
     ru: '<svg class="flag" viewBox="0 0 30 20" aria-hidden="true" focusable="false"><rect width="30" height="20" fill="#fff"/><rect y="6.67" width="30" height="6.67" fill="#0039a6"/><rect y="13.33" width="30" height="6.67" fill="#d52b1e"/></svg>',
@@ -129,7 +131,7 @@
       '<button type="button" class="lang__btn" data-act="lang" aria-haspopup="menu" aria-expanded="false" aria-controls="langMenu" aria-label="' + esc(ui('langLabel')) + '">' + FLAGS[curL.code] + '<span class="lab">' + curL.label + '</span>' +
       '<svg class="lang__caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '<div class="lang__menu" id="langMenu" role="menu" aria-label="' + esc(ui('langLabel')) + '">' + langItems + '</div></div>';
-    var nav = ROUTES.map(function (r) {
+    var nav = ROUTES.filter(routeOk).map(function (r) {
       var lock = SM && SM.needsLogin(r) ? '<svg class="nav__lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' : '';
       return '<a href="#' + r + '"' + (state.route === r ? ' aria-current="page"' : '') + '>' + esc(ui('nav.' + r)) + lock + '</a>';
     }).join('');
@@ -677,7 +679,7 @@
     var steps = D.STEPS.map(function (s, i) {
       var books = s.books.map(function (id) { var b = bookById(id); return b ? '<li>' + (isFreeBook(b) ? ext(b.pdf || b.url, esc(b.title)) : esc(b.title)) + '<small>' + esc(b.authors) + '</small></li>' : ''; }).join('');
       var action = s.course ? '<a class="btn btn--sm" href="#lectures" data-scroll="course-' + s.course + '">' + esc(ui('start.watch')) + '</a>' : '';
-      if (!action && s.booksTab) action = '<a class="btn btn--sm" href="#books" data-book-tab="' + s.booksTab + '" data-book-web="1">' + esc(ui('nav.books')) + '</a>';
+      if (!action && s.booksTab && routeOk('books')) action = '<a class="btn btn--sm" href="#books" data-book-tab="' + s.booksTab + '" data-book-web="1">' + esc(ui('nav.books')) + '</a>';
       if (s.research) action = '<a class="btn btn--sm" href="#research">' + esc(ui('nav.research')) + '</a>';
       return '<li class="step"><span class="step__n" aria-hidden="true">' + (i + 1) + '</span><div class="step__body"><h3><span class="sr">' + esc(ui('start.step')) + ' ' + (i + 1) + '. </span>' + esc(t(s.title)) + '</h3><p>' + esc(t(s.text)) + '</p>' +
         '<h4>' + esc(ui('start.books')) + '</h4><ul class="plain plain--books">' + books + '</ul>' + (action ? '<p>' + action + '</p>' : '') + '</div></li>';
@@ -741,6 +743,10 @@
   }
 
   function renderAll(top) {
+    if (!routeOk(state.route)) { /* signed out, or no longer a group member, while on the Books page */
+      state.route = 'home';
+      try { if (window.location.hash === '#books') window.history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) { /* ignore */ }
+    }
     document.documentElement.lang = I.lang === 'uz' ? 'uz-Latn' : I.lang;
     renderChrome();
     renderMain(top);
@@ -748,7 +754,7 @@
 
   function routeFromHash() {
     var h = (window.location.hash || '').replace(/^#/, '');
-    return ROUTES.indexOf(h) >= 0 ? h : 'home';
+    return ROUTES.indexOf(h) >= 0 && routeOk(h) ? h : 'home';
   }
 
   /* ---------- language dropdown ---------- */

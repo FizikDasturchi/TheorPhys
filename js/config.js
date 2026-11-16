@@ -9,8 +9,10 @@
  *               demo     true  -> accounts are simulated inside the browser (for previews and tests only)
  *               invite   true  -> the sign-up form asks for a group access code and sends it as `code`;
  *                        your backend must check it (README shows the one-line change)
- *               protect  pages that need a signed-in member: any of 'people', 'research', 'publications',
- *                        'lectures', 'books', 'start', 'join'  (use [] to keep every page public)
+ *               protect  pages that need a signed-in account: any of 'people', 'research', 'publications',
+ *                        'lectures', 'start', 'join'  (use [] to keep every page public).
+ *                        The Books page is NOT listed here: it is hidden completely from everyone except
+ *                        group members (role 'team') and admins, see README "Roles".
  * uzAlphabet    'new'    -> Ş Ç Ö Ğ  (alphabet law signed 21 Oct 2026, in force from 22 Apr 2027)
  *               'legacy' -> sh ch oʻ gʻ (1995 alphabet)
  *               Uzbek strings in the source files are written in the 1995 spelling and converted
@@ -27,7 +29,7 @@ window.SITE_CONFIG = {
     api: 'https://script.google.com/macros/s/AKfycbyRxXY7MZahAD_lwPG0rXuuH4XYSKXz5U4ycC9HoGVOwaYkTjWVUzdJxyN6gPU3Pg/exec',
     demo: false,
     invite: false,
-    protect: ['lectures', 'books']
+    protect: ['lectures']
   },
   uzAlphabet: 'new',
   defaultLang: 'auto',

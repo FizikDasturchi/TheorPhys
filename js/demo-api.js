@@ -66,32 +66,38 @@
     var sess = db.Sessions.filter(function (x) { return x.token === q.token && x.exp > Date.now(); })[0];
     var user = sess && db.Users.filter(function (x) { return x.key === sess.key; })[0];
     if (!user) throw 'auth';
-    var admin = user.role === 'admin';
+    var admin = user.role === 'admin', team = admin || user.role === 'team';
     function must() { if (!admin) throw 'Faqat adminlar uchun'; }
+    function needTeam() { if (!team) throw "Ruxsat yo'q"; }
 
     switch (a) {
       case 'data':
         return {
-          books: db.Books.map(function (b) { return { id: b.id, title: b.title, author: b.author, fileId: b.fileId, by: b.by, mine: admin || b.by === user.name }; }),
-          lists: db.Lists.map(function (l) { return { id: l.id, title: l.title, pl: l.pl, by: l.by, mine: admin || l.by === user.name }; }),
+          role: user.role,
+          books: team ? db.Books.map(function (b) { return { id: b.id, title: b.title, author: b.author, fileId: b.fileId, by: b.by, mine: admin || b.by === user.name }; }) : [],
+          lists: db.Lists.filter(function (l) { return team || String(l.pl).indexOf('u:') !== 0; }).map(function (l) { return { id: l.id, title: l.title, pl: l.pl, by: l.by, mine: team && (admin || l.by === user.name) }; }),
           prog: db.Prog.filter(function (p) { return p.key === user.key; }).map(function (p) { return { pl: p.pl, i: p.i, t: p.t }; })
         };
       case 'upStart':
+        needTeam();
         if (!(+q.size > 0)) throw "Fayl bo'sh";
         return { url: 'https://www.googleapis.com/upload/drive/v3/files?demo=1' };
       case 'upPart':
+        needTeam();
         if (!/^https:\/\/www\.googleapis\.com\/upload\/drive\/v3\/files\?/.test(q.url)) throw "Noto'g'ri so'rov";
         var got = q.b64 ? Math.floor(String(q.b64).length * 3 / 4) - (String(q.b64).slice(-2) === '==' ? 2 : String(q.b64).slice(-1) === '=' ? 1 : 0) : (+q.size || 0);
         if ((+q.start || 0) + got < (+q.size || 0)) return done({ ok: 1 }); /* more chunks to come */
         db.Books.push({ id: uid(), title: q.title || 'file', author: q.author || '', fileId: 'demo-' + uid().slice(0, 6), by: user.name, at: Date.now() }); dirty = true;
         return done({ ok: 1, done: 1 });
       case 'delBook': {
+        needTeam();
         var b = db.Books.filter(function (x) { return x.id === q.id; })[0];
         if (!b || !(admin || b.by === user.name)) throw "Ruxsat yo'q";
         db.Books = db.Books.filter(function (x) { return x.id !== q.id; }); dirty = true; return done({ ok: 1 });
       }
-      case 'addList': db.Lists.push({ id: uid(), title: q.title, pl: q.pl, by: user.name }); dirty = true; return done({ ok: 1 });
+      case 'addList': needTeam(); db.Lists.push({ id: uid(), title: q.title, pl: q.pl, by: user.name }); dirty = true; return done({ ok: 1 });
       case 'delList': {
+        needTeam();
         var l = db.Lists.filter(function (x) { return x.id === q.id; })[0];
         if (!l || !(admin || l.by === user.name)) throw "Ruxsat yo'q";
         db.Lists = db.Lists.filter(function (x) { return x.id !== q.id; }); dirty = true; return done({ ok: 1 });
@@ -109,8 +115,9 @@
       case 'setRole': {
         must(); var kk = norm(q.name);
         if (kk === user.key) throw "O'z rolingizni o'zgartira olmaysiz";
-        if (q.role !== 'admin' && q.role !== 'member') throw "Noto'g'ri rol";
+        if (q.role !== 'team' && q.role !== 'member') throw "Noto'g'ri rol";
         var t = db.Users.filter(function (x) { return x.key === kk; })[0]; if (!t) throw "A'zo topilmadi";
+        if (t.role === 'admin') throw "Ruxsat yo'q";
         t.role = q.role; dirty = true; return done({ ok: 1 });
       }
       case 'delUser': {

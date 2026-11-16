@@ -41,7 +41,10 @@
   if (S.tok) {
     try { var cached = JSON.parse(store('dc') || 'null'); if (cached && cached.books) { DB = cached; dbState = 'ok'; } } catch (e) { DB = null; }
   }
+  /* Three roles: 'member' = registered account (lectures only), 'team' = group member (also Books, uploads, adding playlists),
+   * 'admin' = both admins (everything, and they decide who is in the group). The backend enforces this; the checks below only decide what is drawn. */
   function isAdmin() { return S.role === 'admin'; }
+  function isTeam() { return S.role === 'admin' || S.role === 'team'; }
   function setSession(r) {
     S.tok = r.token; S.name = r.name; S.role = r.role;
     store('tok', S.tok); store('nm', S.name); store('rl', S.role);
@@ -94,9 +97,11 @@
     if (dbState === 'loading' && loadPromise) return loadPromise;
     dbState = 'loading'; dbErr = ''; fetchedOnce = true;
     loadPromise = call('data').then(function (r) {
+      var roleMoved = r && r.role && r.role !== S.role; /* an admin changed this person's role since the last visit */
+      if (roleMoved) { S.role = r.role; store('rl', S.role); }
       DB = r; dbState = 'ok'; store('dc', JSON.stringify(r));
       try { out.onData(r); } catch (e) { /* ignore */ }
-      changed('data');
+      changed(roleMoved ? 'role' : 'data');
       return r;
     }, function (e) {
       if (!S.tok) return null;
@@ -186,7 +191,7 @@
   /* ---------- account dialog ---------- */
   function accountBox() {
     openModal('<h2 id="mTitle">' + esc(ui('m.account')) + '</h2>' +
-      '<p class="who">' + esc(ui('m.signedAs', { name: S.name })) + (isAdmin() ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : '') + '</p>' +
+      '<p class="who">' + esc(ui('m.signedAs', { name: S.name })) + (isAdmin() ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : isTeam() ? ' <span class="tag">' + esc(ui('m.team')) + '</span>' : '') + '</p>' +
       '<form id="mPassForm" class="mform" novalidate><h3>' + esc(ui('m.change')) + '</h3>' +
         pwField('mOld', ui('m.passOld'), 'current-password') + pwField('mNew', ui('m.passNew'), 'new-password') +
         '<p class="mform__err" id="mErr" role="alert" hidden></p><p class="mform__ok" id="mOk" role="status" hidden></p>' +
@@ -210,10 +215,13 @@
     call('users').then(function (r) {
       var el = $('#mList'); if (!el) return;
       el.innerHTML = r.users.map(function (u) {
-        var adm = u.role === 'admin', self = String(u.name).toLowerCase() === String(S.name).toLowerCase();
-        return '<div class="mlist__row"><span>' + esc(u.name) + (adm ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : '') + '</span>' +
-          (self ? '' : '<span class="mlist__act"><button type="button" class="btn btn--sm" data-m="setrole" data-name="' + esc(u.name) + '" data-role="' + (adm ? 'member' : 'admin') + '">' + esc(ui(adm ? 'm.removeAdmin' : 'm.makeAdmin')) + '</button>' +
-          '<button type="button" class="btn btn--sm btn--danger" data-m="del-user" data-name="' + esc(u.name) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button></span>') + '</div>';
+        var adm = u.role === 'admin', team = u.role === 'team', self = String(u.name).toLowerCase() === String(S.name).toLowerCase();
+        var tag = adm ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : team ? ' <span class="tag">' + esc(ui('m.team')) + '</span>' : '';
+        /* admins are fixed in the backend; everybody else is either a plain account or a group member */
+        var roleBtn = adm ? '' : '<button type="button" class="btn btn--sm" data-m="setrole" data-name="' + esc(u.name) + '" data-role="' + (team ? 'member' : 'team') + '">' + esc(ui(team ? 'm.removeMember' : 'm.makeMember')) + '</button>';
+        var delBtn2 = '<button type="button" class="btn btn--sm btn--danger" data-m="del-user" data-name="' + esc(u.name) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>';
+        return '<div class="mlist__row"><span>' + esc(u.name) + tag + '</span>' +
+          (self ? '' : '<span class="mlist__act">' + roleBtn + (adm ? '' : delBtn2) + '</span>') + '</div>';
       }).join('') || '<p class="muted">' + esc(ui('m.lib.empty')) + '</p>';
     }).then(null, function (e) { var el = $('#mList'); if (el) el.innerHTML = '<p class="mform__err">' + esc(e.message) + '</p>'; });
   }
@@ -278,7 +286,7 @@
     var cover = stub ? libCover(b) : '<a class="cover-link" target="_blank" rel="noopener noreferrer" href="' + driveView(b.fileId) + '" tabindex="-1">' + libCover(b) + '</a>';
     var actions = stub ? '' : '<a class="btn btn--sm" target="_blank" rel="noopener noreferrer" href="' + driveView(b.fileId) + '">' + esc(ui('m.lib.open')) + '</a>' +
       '<a class="btn btn--sm" href="' + driveDl(b.fileId) + '">' + esc(ui('m.lib.download')) + '</a>';
-    if (b.mine) actions += '<button type="button" class="btn btn--sm btn--danger" data-m="del-book" data-id="' + esc(b.id) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>';
+    if (b.mine && isTeam()) actions += '<button type="button" class="btn btn--sm btn--danger" data-m="del-book" data-id="' + esc(b.id) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>';
     return '<article class="libcard">' + cover + '<div class="libcard__body"><h4>' + esc(b.ti) + '</h4>' +
       (b.author ? '<p class="by">' + esc(b.author) + '</p>' : '') +
       (b.by ? '<p class="muted small">' + esc(ui('m.lib.addedBy', { name: b.by })) + '</p>' : '') +
@@ -487,7 +495,7 @@
    * rowsFn(items, currentVideoId) is supplied by app.js and draws the same rows as the course lectures above. */
   function isSingle(x) { return String(x.pl).indexOf('v:') === 0; }
   function delBtn(x) {
-    return x.mine ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(x.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + x.title) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '';
+    return x.mine && isTeam() ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(x.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + x.title) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '';
   }
   function listRow(x, embed, curId) {
     var single = isSingle(x);
@@ -519,7 +527,7 @@
         packs.map(function (x) { return packBlock(x, embed, curId, curVid, rowsFn); }).join('');
     }
     return '<section class="course pls" id="course-members"><div class="pls__head"><h2>' + esc(ui('m.pl.title')) + '</h2>' +
-      '<button type="button" class="btn btn--sm" data-m="addlist">' + esc(ui('m.pl.add')) + '</button></div><p>' + esc(ui('m.pl.intro')) + '</p>' + rows + '</section>';
+      (isTeam() ? '<button type="button" class="btn btn--sm" data-m="addlist">' + esc(ui('m.pl.add')) + '</button>' : '') + '</div><p>' + esc(ui('m.pl.intro')) + '</p>' + rows + '</section>';
   }
   function addListBox() {
     openModal('<h2 id="mTitle">' + esc(ui('m.pl.add')) + '</h2>' +
@@ -551,7 +559,7 @@
   function webRow(w) {
     var sub = esc(hostOf(w.url)) + (w.by ? ' &middot; ' + esc(ui('m.lib.addedBy', { name: w.by })) : '');
     return '<li class="weblink"><a class="weblink__a" href="' + esc(w.url) + '" target="_blank" rel="noopener noreferrer"><span class="weblink__t"><b>' + esc(w.ti) + '</b><small>' + sub + '</small></span><span class="weblink__go">' + ICON_EXT + '</span></a>' +
-      (w.mine ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(w.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + w.ti) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '') + '</li>';
+      (w.mine && isTeam() ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(w.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + w.ti) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '') + '</li>';
   }
   function webHtml() {
     if (!S.tok) return '';
@@ -598,6 +606,7 @@
     if (act === 'close') { closeModal(); return; }
     if (act === 'signout') { closeModal(true); signOut(); return; }
     if (act === 'members') { membersBox(); return; }
+    if ((act === 'upload' || act === 'upopen' || act === 'addlist' || act === 'addlink') && !isTeam()) return; /* group members only; the backend refuses it too */
     if (act === 'upload' || act === 'upopen') { uploadBox(); return; }
     if (act === 'updock-x') { UPQ = UPQ.filter(function (u) { return u.st === 'run' || u.st === 'wait'; }); paintDock(); return; }
     if (act === 'addlist') { addListBox(); return; }
@@ -656,6 +665,8 @@
     demo: !!M.demo,
     out: out,
     signedIn: function () { return !!S.tok; },
+    isTeam: isTeam,
+    canBooks: function () { return !enabled || isTeam(); }, /* the Books page exists only for group members and admins */
     user: function () { return { name: S.name, role: S.role }; },
     needsLogin: needsLogin,
     lockHtml: lockHtml,

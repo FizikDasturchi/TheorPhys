@@ -14,18 +14,25 @@ The site has real accounts (first name + last name + password). It talks to the 
 backend as the AstroPhysics site, so accounts, shared books and playlists are the same on both sites.
 `js/config.js` already holds that backend's address (`members.api`).
 
-What a signed-in member gets:
-- the Lectures page (video courses play inside the page) and the Books page, which are locked until sign-in;
-- **Group resources** on the Books page: books and notes shared by the group for each subject, with search, upload
-  (large files go to Google Drive in parts) and delete (your own files; admins can delete any);
-- **Internet resources** on the Books page: members add links (see "Books" below);
-- shared playlists on the Lectures page: add any YouTube video or playlist link;
-- "continue where you stopped" for every lecture and playlist, saved on the server, so it follows the member to another device;
-- account dialog: change password; admins also see the member list and can make or remove admins.
+Roles (the backend enforces them, the pages only follow):
+
+| Role | Who | What they get |
+|---|---|---|
+| visitor | not signed in | public pages; Lectures is locked |
+| registered (`member`) | anybody who signs up | Lectures unlocked: video courses, the group's playlists, "continue where you stopped". **No Books page** (not in the top bar, its address leads home), cannot upload files, cannot add playlists |
+| group member (`team`) | made by an admin | everything above, plus the **Books page** (group resources, search, download, upload, internet links) and adding / deleting their own YouTube videos and playlists |
+| admin | the two names in `ADMINS` | everything, can delete any file or playlist, and decide who is in the group |
+
+Admins open the account dialog (initial in the top bar) > Members: every registered person has a **Make member** button
+(becomes **Remove from group** afterwards). Admin rights themselves are only given in `ADMINS` inside `code.gs`.
+A role change shows on the person's next page load or refresh.
+
+- progress ("continue where you stopped") is saved on the server for every signed-in account and follows them to another device;
+- account dialog: change password.
 
 Choose which pages need sign-in in `js/config.js`:
 
-    protect: ['lectures', 'books']      // add 'people', 'publications', ... or use [] to keep everything public
+    protect: ['lectures']      // add 'people', 'publications', ... or use [] to keep everything public (Books is separate: group members only)
 
 ### Setting up your own backend (only if you do not want to share the AstroPhysics one)
 1. Make a new Google Sheet, then Extensions > Apps Script. Paste your `code.gs` over the old code.
