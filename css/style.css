@@ -112,7 +112,7 @@ main:focus { outline: none; }
 }
 .bar { display: flex; align-items: center; gap: 14px; height: 64px; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); min-width: 0; flex: none; }
-.brand__logo { display: inline-flex; width: 30px; height: 30px; color: var(--text); flex: none; }
+.brand__logo { display: inline-flex; width: 38px; height: 38px; color: var(--text); flex: none; border-radius: 10px; transition: transform .25s ease, box-shadow .25s ease; }
 .brand__logo svg { width: 100%; height: 100%; }
 .brand__text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
 .brand__text b { font-family: var(--serif); font-size: 0.95rem; font-weight: 600; line-height: 1.15; white-space: normal; max-width: 250px; }
@@ -142,7 +142,7 @@ main:focus { outline: none; }
 @media (max-width: 520px) {
   .bar { gap: 8px; }
   .brand { flex: 1 1 auto; gap: 8px; }
-  .brand__logo { width: 26px; height: 26px; }
+  .brand__logo { width: 32px; height: 32px; }
   .brand__text small { display: none; }
   .brand__text b { font-size: 0.86rem; line-height: 1.15; white-space: normal; overflow: visible; }
   .tools { gap: 6px; flex: none; }
@@ -407,7 +407,7 @@ details summary { cursor: pointer; font-weight: 600; font-size: 0.92rem; }
 .foot { padding-top: 28px; padding-bottom: 36px; color: var(--muted); font-size: 0.88rem; }
 .foot p { margin: 0 0 6px; }
 .foot__brand { display: flex; align-items: center; gap: 10px; color: var(--text); margin-bottom: 10px; }
-.foot__brand .brand__logo { width: 24px; height: 24px; }
+.foot__brand .brand__logo { width: 28px; height: 28px; border-radius: 8px; }
 .foot__law { max-width: 80ch; }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -654,4 +654,39 @@ a.card:hover { box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 22px rgba(15,
   html[lang="ru"] .nav a { padding: 12px 8px; font-size: 1rem; }
   html[lang="ru"] .nav a[aria-current="page"]::after { left: 8px; right: auto; width: 28px; bottom: 6px; }
   html[lang="ru"] .tools { margin-left: auto; }
+}
+
+
+/* ---------- logo: black hole badge ---------- */
+.brand:hover .brand__logo { transform: scale(1.07) rotate(-3deg); box-shadow: 0 0 14px rgba(242, 145, 90, 0.55); }
+@media (prefers-reduced-motion: no-preference) {
+  .bh-disk { animation: bhPulse 4.5s ease-in-out infinite alternate; }
+  @keyframes bhPulse { from { opacity: 0.72; } to { opacity: 1; } }
+}
+
+/* ---------- theme button: sun <-> moon ---------- */
+.iconbtn[data-act="theme"] { color: var(--hot); overflow: hidden; transition: border-color .2s, box-shadow .2s, color .4s; }
+.iconbtn[data-act="theme"]:hover { border-color: var(--hot); box-shadow: 0 0 12px rgba(242, 145, 90, 0.35); }
+.sunmoon { overflow: visible; }
+.sunmoon .sm-body, .sunmoon .sm-cut, .sunmoon .sm-rays, .sunmoon .sm-stars {
+  transform-origin: 12px 12px;
+  transition: transform .6s cubic-bezier(.4, 0, .2, 1), opacity .5s ease;
+}
+/* day = sun (small disc, rays out, cut-out hidden away) */
+.sunmoon .sm-body { transform: scale(0.6); }
+.sunmoon .sm-cut { transform: translate(18px, -18px); }
+.sunmoon .sm-rays { transform: rotate(0deg) scale(1); opacity: 1; }
+.sunmoon .sm-stars { transform: scale(0.2); opacity: 0; }
+/* night = moon (big disc with a bite out of it, rays folded away, stars appear) */
+:root[data-theme="dark"] .iconbtn[data-act="theme"] { color: #dfe6ff; }
+:root[data-theme="dark"] .sunmoon .sm-body { transform: scale(1) rotate(-25deg); }
+:root[data-theme="dark"] .sunmoon .sm-cut { transform: translate(5.2px, -4.6px); }
+:root[data-theme="dark"] .sunmoon .sm-rays { transform: rotate(90deg) scale(0.3); opacity: 0; }
+:root[data-theme="dark"] .sunmoon .sm-stars { transform: scale(1); opacity: 1; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .iconbtn[data-act="theme"] { color: #dfe6ff; }
+  :root:not([data-theme="light"]) .sunmoon .sm-body { transform: scale(1) rotate(-25deg); }
+  :root:not([data-theme="light"]) .sunmoon .sm-cut { transform: translate(5.2px, -4.6px); }
+  :root:not([data-theme="light"]) .sunmoon .sm-rays { transform: rotate(90deg) scale(0.3); opacity: 0; }
+  :root:not([data-theme="light"]) .sunmoon .sm-stars { transform: scale(1); opacity: 1; }
 }
