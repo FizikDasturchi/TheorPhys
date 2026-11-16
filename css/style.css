@@ -123,14 +123,15 @@ main:focus { outline: none; }
 .nav a[aria-current="page"] { color: var(--text); }
 .nav a[aria-current="page"]::after { content: ""; position: absolute; left: 9px; right: 9px; bottom: 2px; height: 2px; background: var(--hot); border-radius: 2px; }
 .tools { display: flex; align-items: center; gap: 8px; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
-.seg button { font: 500 0.78rem/1 var(--mono); border: 0; background: transparent; color: var(--muted); padding: 8px 9px; cursor: pointer; }
-.seg button + button { border-left: 1px solid var(--line); }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.seg { display: inline-flex; gap: 6px; }
+.seg button { display: inline-flex; align-items: center; gap: 7px; font: 700 0.82rem/1 var(--sans, inherit); letter-spacing: 0.02em; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); padding: 6px 12px 6px 9px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.seg button:hover { border-color: var(--accent); color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.seg .flag { width: 22px; height: 15px; border-radius: 2px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
 .iconbtn { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; cursor: pointer; padding: 0; }
 .iconbtn svg { width: 20px; height: 20px; }
 .menubtn { display: none; }
-@media (max-width: 1200px) {
+@media (max-width: 1320px) {
   .menubtn { display: inline-flex; }
   .nav { display: none; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; gap: 0; padding: 8px 14px 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
   body.navopen .nav { display: flex; }
@@ -145,7 +146,10 @@ main:focus { outline: none; }
   .brand__text small { display: none; }
   .brand__text b { font-size: 0.86rem; line-height: 1.15; white-space: normal; overflow: visible; }
   .tools { gap: 6px; flex: none; }
-  .seg button { padding: 8px 7px; }
+  .seg { gap: 4px; }
+  .seg button { padding: 6px 7px; }
+  .seg .lab { display: none; }
+  .seg button[aria-pressed="true"] .lab { display: inline; }
   .iconbtn { width: 34px; height: 34px; }
 }
 

@@ -8,6 +8,11 @@
   var SY = window.SiteYT;
 
   var ROUTES = ['home', 'people', 'research', 'publications', 'lectures', 'books', 'start', 'join'];
+  var FLAGS = {
+    uz: '<svg class="flag" viewBox="0 0 30 20" aria-hidden="true" focusable="false"><rect width="30" height="20" fill="#1eb53a"/><rect width="30" height="6.2" fill="#0099b5"/><rect y="6.2" width="30" height="7.6" fill="#ce1126"/><rect y="6.9" width="30" height="6.2" fill="#fff"/><circle cx="5.6" cy="3.1" r="2.1" fill="#fff"/><circle cx="6.5" cy="3.1" r="1.8" fill="#0099b5"/><g fill="#fff"><circle cx="9.2" cy="1.8" r=".5"/><circle cx="11" cy="1.8" r=".5"/><circle cx="12.8" cy="1.8" r=".5"/><circle cx="10.1" cy="3.4" r=".5"/><circle cx="11.9" cy="3.4" r=".5"/><circle cx="11" cy="5" r=".5"/></g></svg>',
+    ru: '<svg class="flag" viewBox="0 0 30 20" aria-hidden="true" focusable="false"><rect width="30" height="20" fill="#fff"/><rect y="6.67" width="30" height="6.67" fill="#0039a6"/><rect y="13.33" width="30" height="6.67" fill="#d52b1e"/></svg>',
+    en: '<svg class="flag" viewBox="0 0 60 40" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect width="60" height="40" fill="#012169"/><path d="M0 0 60 40M60 0 0 40" stroke="#fff" stroke-width="8"/><path d="M0 0 60 40M60 0 0 40" stroke="#c8102e" stroke-width="3"/><path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="13"/><path d="M30 0v40M0 20h60" stroke="#c8102e" stroke-width="8"/></svg>'
+  };
   var LANGS = [
     { code: 'uz', label: 'UZ', name: "O'zbekcha" },
     { code: 'ru', label: 'RU', name: 'Русский' },
@@ -116,7 +121,7 @@
   /* ---------- chrome ---------- */
   function renderChrome() {
     var langBtns = LANGS.map(function (l) {
-      return '<button type="button" data-lang="' + l.code + '" aria-pressed="' + (I.lang === l.code) + '" lang="' + l.code + '" title="' + esc(l.code === 'uz' ? I.uzConvert(l.name, I.alpha) : l.name) + '">' + l.label + '</button>';
+      return '<button type="button" data-lang="' + l.code + '" aria-pressed="' + (I.lang === l.code) + '" lang="' + l.code + '" title="' + esc(l.code === 'uz' ? I.uzConvert(l.name, I.alpha) : l.name) + '">' + FLAGS[l.code] + '<span class="lab">' + l.label + '</span></button>';
     }).join('');
     var nav = ROUTES.map(function (r) {
       var lock = SM && SM.needsLogin(r) ? '<svg class="nav__lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' : '';
