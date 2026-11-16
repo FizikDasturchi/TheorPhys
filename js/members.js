@@ -132,8 +132,12 @@
   }
   function closeModal(keepFocus) {
     if (!modalEl) return;
-    modalEl.remove(); modalEl = null;
+    var gone = modalEl; modalEl = null;
     document.body.classList.remove('modal-open');
+    /* fade and shrink out, then remove (no wait when the page asks for less motion, or a new dialog replaces this one) */
+    var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (calm || keepFocus === true) { gone.remove(); }
+    else { gone.classList.add('is-closing'); setTimeout(function () { gone.remove(); }, 230); }
     if (!keepFocus && lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) { /* ignore */ } }
   }
   function showErr(msg) { var el = $('#mErr', modalEl); if (el) { el.textContent = msg; el.hidden = !msg; } }

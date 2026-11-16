@@ -123,11 +123,20 @@ main:focus { outline: none; }
 .nav a[aria-current="page"] { color: var(--text); }
 .nav a[aria-current="page"]::after { content: ""; position: absolute; left: 9px; right: 9px; bottom: 2px; height: 2px; background: var(--hot); border-radius: 2px; }
 .tools { display: flex; align-items: center; gap: 8px; }
-.seg { display: inline-flex; gap: 6px; }
-.seg button { display: inline-flex; align-items: center; gap: 7px; font: 700 0.82rem/1 var(--sans, inherit); letter-spacing: 0.02em; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); padding: 6px 12px 6px 9px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
-.seg button:hover { border-color: var(--accent); color: var(--text); }
-.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.seg .flag { width: 22px; height: 15px; border-radius: 2px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+/* language dropdown */
+.lang { position: relative; }
+.lang__btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; font: 700 0.85rem/1 var(--sans, inherit); letter-spacing: 0.02em; border: 1.5px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); padding: 0 10px 0 10px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.lang__btn:hover, .lang.open .lang__btn { border-color: var(--accent); }
+.lang__caret { width: 12px; height: 12px; flex: none; color: var(--muted); transition: transform .25s ease; }
+.lang.open .lang__caret { transform: rotate(180deg); }
+.lang .flag { width: 22px; height: 15px; border-radius: 2px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+.lang__menu { position: absolute; right: 0; top: calc(100% + 10px); z-index: 60; min-width: 218px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 40px -14px rgba(8, 12, 30, 0.38), 0 2px 8px rgba(8, 12, 30, 0.08); opacity: 0; visibility: hidden; transform: translateY(-6px) scale(0.96); transform-origin: top right; transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .22s; }
+.lang.open .lang__menu { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+.lang__item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; border-radius: 9px; background: transparent; color: var(--text); font: 700 0.95rem/1.2 var(--sans, inherit); padding: 11px 12px; cursor: pointer; transition: background-color .15s, color .15s; }
+.lang__item:hover, .lang__item:focus-visible { background: var(--sunken); }
+.lang__item[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); }
+:root[data-theme="dark"] .lang__item[aria-checked="true"] { color: #b9c9ff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lang__item[aria-checked="true"] { color: #b9c9ff; } }
 .iconbtn { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; cursor: pointer; padding: 0; }
 .iconbtn svg { width: 20px; height: 20px; }
 .menubtn { display: none; }
@@ -146,10 +155,8 @@ main:focus { outline: none; }
   .brand__text small { display: none; }
   .brand__text b { font-size: 0.86rem; line-height: 1.15; white-space: normal; overflow: visible; }
   .tools { gap: 6px; flex: none; }
-  .seg { gap: 4px; }
-  .seg button { padding: 6px 7px; }
-  .seg .lab { display: none; }
-  .seg button[aria-pressed="true"] .lab { display: inline; }
+  .lang__btn { gap: 6px; padding: 0 8px; height: 34px; }
+  .lang__menu { min-width: 204px; }
   .iconbtn { width: 34px; height: 34px; }
 }
 
@@ -664,29 +671,50 @@ a.card:hover { box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08), 0 8px 22px rgba(15,
   @keyframes bhPulse { from { opacity: 0.72; } to { opacity: 1; } }
 }
 
-/* ---------- theme button: sun <-> moon ---------- */
-.iconbtn[data-act="theme"] { color: var(--hot); overflow: hidden; transition: border-color .2s, box-shadow .2s, color .4s; }
-.iconbtn[data-act="theme"]:hover { border-color: var(--hot); box-shadow: 0 0 12px rgba(242, 145, 90, 0.35); }
+/* ---------- theme button: sun <-> moon ----------
+   The icon shows where a click leads: on a light page the moon (click = dark), on a dark page the sun (click = light). */
+.iconbtn[data-act="theme"] { color: #4a5a99; overflow: hidden; transition: border-color .2s, box-shadow .2s, color .4s; }
+.iconbtn[data-act="theme"]:hover { border-color: #4a5a99; box-shadow: 0 0 12px rgba(74, 90, 153, 0.30); }
 .sunmoon { overflow: visible; }
 .sunmoon .sm-body, .sunmoon .sm-cut, .sunmoon .sm-rays, .sunmoon .sm-stars {
   transform-origin: 12px 12px;
   transition: transform .6s cubic-bezier(.4, 0, .2, 1), opacity .5s ease;
 }
-/* day = sun (small disc, rays out, cut-out hidden away) */
-.sunmoon .sm-body { transform: scale(0.6); }
-.sunmoon .sm-cut { transform: translate(18px, -18px); }
-.sunmoon .sm-rays { transform: rotate(0deg) scale(1); opacity: 1; }
-.sunmoon .sm-stars { transform: scale(0.2); opacity: 0; }
-/* night = moon (big disc with a bite out of it, rays folded away, stars appear) */
-:root[data-theme="dark"] .iconbtn[data-act="theme"] { color: #dfe6ff; }
-:root[data-theme="dark"] .sunmoon .sm-body { transform: scale(1) rotate(-25deg); }
-:root[data-theme="dark"] .sunmoon .sm-cut { transform: translate(5.2px, -4.6px); }
-:root[data-theme="dark"] .sunmoon .sm-rays { transform: rotate(90deg) scale(0.3); opacity: 0; }
-:root[data-theme="dark"] .sunmoon .sm-stars { transform: scale(1); opacity: 1; }
+/* light page = moon (big disc with a bite out of it, rays folded away, stars shown) */
+.sunmoon .sm-body { transform: scale(1) rotate(-25deg); }
+.sunmoon .sm-cut { transform: translate(5.2px, -4.6px); }
+.sunmoon .sm-rays { transform: rotate(90deg) scale(0.3); opacity: 0; }
+.sunmoon .sm-stars { transform: scale(1); opacity: 1; }
+/* dark page = sun (small disc, rays out, cut-out hidden away) */
+:root[data-theme="dark"] .iconbtn[data-act="theme"] { color: var(--hot); }
+:root[data-theme="dark"] .iconbtn[data-act="theme"]:hover { border-color: var(--hot); box-shadow: 0 0 12px rgba(242, 145, 90, 0.35); }
+:root[data-theme="dark"] .sunmoon .sm-body { transform: scale(0.6); }
+:root[data-theme="dark"] .sunmoon .sm-cut { transform: translate(18px, -18px); }
+:root[data-theme="dark"] .sunmoon .sm-rays { transform: rotate(0deg) scale(1); opacity: 1; }
+:root[data-theme="dark"] .sunmoon .sm-stars { transform: scale(0.2); opacity: 0; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .iconbtn[data-act="theme"] { color: #dfe6ff; }
-  :root:not([data-theme="light"]) .sunmoon .sm-body { transform: scale(1) rotate(-25deg); }
-  :root:not([data-theme="light"]) .sunmoon .sm-cut { transform: translate(5.2px, -4.6px); }
-  :root:not([data-theme="light"]) .sunmoon .sm-rays { transform: rotate(90deg) scale(0.3); opacity: 0; }
-  :root:not([data-theme="light"]) .sunmoon .sm-stars { transform: scale(1); opacity: 1; }
+  :root:not([data-theme="light"]) .iconbtn[data-act="theme"] { color: var(--hot); }
+  :root:not([data-theme="light"]) .iconbtn[data-act="theme"]:hover { border-color: var(--hot); box-shadow: 0 0 12px rgba(242, 145, 90, 0.35); }
+  :root:not([data-theme="light"]) .sunmoon .sm-body { transform: scale(0.6); }
+  :root:not([data-theme="light"]) .sunmoon .sm-cut { transform: translate(18px, -18px); }
+  :root:not([data-theme="light"]) .sunmoon .sm-rays { transform: rotate(0deg) scale(1); opacity: 1; }
+  :root:not([data-theme="light"]) .sunmoon .sm-stars { transform: scale(0.2); opacity: 0; }
+}
+
+/* ---------- theme change effect ---------- */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) { z-index: 2; }
+html.theme-fade, html.theme-fade * { transition: background-color .45s ease, color .45s ease, border-color .45s ease, fill .45s ease, stroke .45s ease; }
+
+/* ---------- dialogs open and close with an effect ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .modal { animation: mFade .22s ease both; }
+  .modal__box { animation: mPop .32s cubic-bezier(.2, .85, .25, 1) both; }
+  .modal.is-closing { animation: mFadeOut .2s ease both; pointer-events: none; }
+  .modal.is-closing .modal__box { animation: mPopOut .2s ease both; }
+  @keyframes mFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes mFadeOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes mPop { from { opacity: 0; transform: translateY(16px) scale(0.94); } to { opacity: 1; transform: none; } }
+  @keyframes mPopOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(0.96); } }
 }

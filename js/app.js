@@ -120,9 +120,15 @@
 
   /* ---------- chrome ---------- */
   function renderChrome() {
-    var langBtns = LANGS.map(function (l) {
-      return '<button type="button" data-lang="' + l.code + '" aria-pressed="' + (I.lang === l.code) + '" lang="' + l.code + '" title="' + esc(l.code === 'uz' ? I.uzConvert(l.name, I.alpha) : l.name) + '">' + FLAGS[l.code] + '<span class="lab">' + l.label + '</span></button>';
+    function langName(l) { return l.code === 'uz' ? I.uzConvert(l.name, I.alpha) : l.name; }
+    var curL = LANGS.filter(function (l) { return l.code === I.lang; })[0] || LANGS[0];
+    var langItems = LANGS.map(function (l) {
+      return '<button type="button" role="menuitemradio" class="lang__item" data-lang="' + l.code + '" aria-checked="' + (I.lang === l.code) + '" lang="' + l.code + '">' + FLAGS[l.code] + '<span>' + esc(langName(l)) + ' (' + l.label + ')</span></button>';
     }).join('');
+    var langBox = '<div class="lang" id="langBox">' +
+      '<button type="button" class="lang__btn" data-act="lang" aria-haspopup="menu" aria-expanded="false" aria-controls="langMenu" aria-label="' + esc(ui('langLabel')) + '">' + FLAGS[curL.code] + '<span class="lab">' + curL.label + '</span>' +
+      '<svg class="lang__caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '<div class="lang__menu" id="langMenu" role="menu" aria-label="' + esc(ui('langLabel')) + '">' + langItems + '</div></div>';
     var nav = ROUTES.map(function (r) {
       var lock = SM && SM.needsLogin(r) ? '<svg class="nav__lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' : '';
       return '<a href="#' + r + '"' + (state.route === r ? ' aria-current="page"' : '') + '>' + esc(ui('nav.' + r)) + lock + '</a>';
@@ -132,7 +138,7 @@
         '<a class="brand" href="#home"><span class="brand__logo">' + ICON.logo + '</span><span class="brand__text"><b>' + esc(ui('nav.brand')) + '</b><small>' + esc(ui('nav.sub')) + '</small></span></a>' +
         '<nav class="nav" id="nav" aria-label="' + esc(ui('menu')) + '">' + nav + '</nav>' +
         '<div class="tools">' +
-          '<div class="seg" role="group" aria-label="' + esc(ui('langLabel')) + '">' + langBtns + '</div>' +
+          langBox +
           '<button type="button" class="iconbtn" data-act="theme" aria-label="' + esc(ui('theme')) + '">' + ICON.theme + '</button>' +
           (SM ? SM.accountButton() : '') +
           '<button type="button" class="iconbtn menubtn" data-act="menu" aria-expanded="false" aria-controls="nav" aria-label="' + esc(ui('menu')) + '">' + ICON.menu + '</button>' +
@@ -745,8 +751,28 @@
     return ROUTES.indexOf(h) >= 0 ? h : 'home';
   }
 
+  /* ---------- language dropdown ---------- */
+  function langOpen() { var b = document.getElementById('langBox'); return !!(b && b.classList.contains('open')); }
+  function setLangOpen(on) {
+    var b = document.getElementById('langBox'); if (!b) return;
+    b.classList.toggle('open', on);
+    var t = b.querySelector('.lang__btn'); if (t) t.setAttribute('aria-expanded', String(on));
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!langOpen()) return;
+    var b = document.getElementById('langBox'), items = Array.prototype.slice.call(b.querySelectorAll('.lang__item'));
+    if (e.key === 'Escape') { setLangOpen(false); var t = b.querySelector('.lang__btn'); if (t) t.focus(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      var i = items.indexOf(document.activeElement);
+      i = e.key === 'ArrowDown' ? (i + 1) % items.length : (i <= 0 ? items.length - 1 : i - 1);
+      items[i].focus();
+    }
+  });
+
   /* ---------- events ---------- */
   document.addEventListener('click', function (e) {
+    if (langOpen() && !(e.target.closest && e.target.closest('#langBox'))) setLangOpen(false);
     var el = e.target.closest ? e.target.closest('[data-lang],[data-act],[data-ppl-level],[data-pub-theme],[data-pub-q],[data-book-tab],[data-book-mode],[data-find],[data-play],[data-mplay],[data-copy],[data-scroll],#skipbtn,.nav a') : null;
     if (!el) return;
 
@@ -757,8 +783,26 @@
       var root = document.documentElement;
       var cur = root.getAttribute('data-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       var next = cur === 'dark' ? 'light' : 'dark';
-      root.setAttribute('data-theme', next); store('theme', next); return;
+      var apply = function () { root.setAttribute('data-theme', next); store('theme', next); };
+      var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (calm) { apply(); return; }
+      if (document.startViewTransition) {
+        /* the new theme grows out of the button like a circle of light (or of night) */
+        var rc = el.getBoundingClientRect(), cx = rc.left + rc.width / 2, cy = rc.top + rc.height / 2;
+        var rad = Math.hypot(Math.max(cx, window.innerWidth - cx), Math.max(cy, window.innerHeight - cy));
+        var vt = document.startViewTransition(apply);
+        vt.ready.then(function () {
+          root.animate({ clipPath: ['circle(0px at ' + cx + 'px ' + cy + 'px)', 'circle(' + rad + 'px at ' + cx + 'px ' + cy + 'px)'] },
+            { duration: 700, easing: 'cubic-bezier(.4, 0, .2, 1)', pseudoElement: '::view-transition-new(root)' });
+        }, function () { /* transition skipped: the theme is set anyway */ });
+      } else {
+        /* older browsers: colours fade over half a second */
+        root.classList.add('theme-fade'); apply();
+        setTimeout(function () { root.classList.remove('theme-fade'); }, 550);
+      }
+      return;
     }
+    if (el.getAttribute('data-act') === 'lang') { setLangOpen(!langOpen()); return; }
     if (el.getAttribute('data-act') === 'menu') {
       var open = document.body.classList.toggle('navopen');
       el.setAttribute('aria-expanded', String(open)); return;
