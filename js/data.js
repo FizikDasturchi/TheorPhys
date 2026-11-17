@@ -606,7 +606,7 @@
       title: L('Group website goes live', 'Сайт группы запущен', "Guruh veb-sayti ishga tushdi"),
       text: L('People, publications, video lectures and a reading list for new students are now in one place, in three languages.',
               'Участники, публикации, видеолекции и список литературы для новичков теперь собраны в одном месте, на трёх языках.',
-              "A'zolar, nashrlar, video ma'ruzalar va yangi talabalar uchun adabiyotlar ro'yxati endi bir joyda, uchta tilda.") },
+              "A'zolar, nashrlar, video ma'ruzalar va yangi talabalar uchun adabiyotlar ro'yxati endi bir joyda, uch tilda.") },
     { date: '2026-06-04',
       title: L('New paper in Chinese Physics C', 'Новая статья в Chinese Physics C', "⟦Chinese Physics C⟧'da yangi maqola"),
       text: L('“Strong gravitational lensing and shadow signatures of anisotropic black holes in plasma”, with students and collaborators, accepted on 3 June 2026.',
