@@ -41,33 +41,10 @@
   if (S.tok) {
     try { var cached = JSON.parse(store('dc') || 'null'); if (cached && cached.books) { DB = cached; dbState = 'ok'; } } catch (e) { DB = null; }
   }
-  /* Roles: 'member' = guest (reads lectures, books and links, adds nothing), 'ask' = a guest who asked to join the group (same rights, waits
-   * for an admin), 'team' = group member (also uploads books, adds videos and links), 'admin' = both admins (everything, and they approve
-   * group members). The backend enforces this; the checks below only decide what is drawn. */
+  /* Three roles: 'member' = registered account (lectures only), 'team' = group member (also Books, uploads, adding playlists),
+   * 'admin' = both admins (everything, and they decide who is in the group). The backend enforces this; the checks below only decide what is drawn. */
   function isAdmin() { return S.role === 'admin'; }
   function isTeam() { return S.role === 'admin' || S.role === 'team'; }
-  /* A small hint for guests where the add buttons would be: who may add things, and how to ask. */
-  function waitingCount() { return isAdmin() && DB && +DB.waiting > 0 ? +DB.waiting : 0; }
-  function joinLine() {
-    if (!enabled || isTeam()) return '';
-    if (S.role === 'ask') return '<p class="muted small joinline">' + esc(ui('m.join.waiting')) + '</p>';
-    return '<p class="muted small joinline">' + esc(ui('m.join.only')) + ' <button type="button" class="linkbtn" data-m="joinask">' + esc(ui('m.join.ask')) + '</button></p>';
-  }
-  /* Names on the People page get a tick in the admin list. The match is loose (first three letters of the first name and first five of
-   * the surname), because people spell names differently; it is only a hint for the admin. */
-  function nameKey(n) {
-    var t = String(n || '').toLowerCase().replace(/[ʻʼ'`’‘.]/g, '').replace(/\s+/g, ' ').trim().split(' ');
-    return t.length < 2 ? '' : t[0].slice(0, 3) + '|' + t[t.length - 1].slice(0, 5);
-  }
-  function rosterSet() {
-    var D = window.SITE_DATA, set = {};
-    if (!D) return set;
-    (D.MEMBERS || []).concat(D.LEADERS || []).forEach(function (m) {
-      if (m.placeholder || !m.name) return;
-      ['en', 'ru', 'uz'].forEach(function (l) { var k = nameKey(m.name[l]); if (k) set[k] = 1; });
-    });
-    return set;
-  }
   function setSession(r) {
     S.tok = r.token; S.name = r.name; S.role = r.role;
     store('tok', S.tok); store('nm', S.name); store('rl', S.role);
@@ -191,7 +168,6 @@
         '<label class="fld"><span>' + esc(ui('m.last')) + '</span><input id="mLast" autocomplete="family-name" required></label>' +
         pwField('mPass', ui('m.pass'), up ? 'new-password' : 'current-password') +
         (up ? '<p class="hint">' + esc(ui('m.passHint')) + '</p>' : '') +
-        (up ? '<label class="fld"><span>' + esc(ui('m.note')) + '</span><input id="mNote" autocomplete="off" maxlength="200"></label><p class="hint">' + esc(ui('m.noteHint')) + '</p>' : '') +
         (up && M.invite ? '<label class="fld"><span>' + esc(ui('m.code')) + '</span><input id="mCode" autocomplete="off" required></label><p class="hint">' + esc(ui('m.codeHint')) + '</p>' : '') +
         '<p class="mform__err" id="mErr" role="alert" hidden></p>' +
         '<button type="submit" class="btn">' + esc(ui(up ? 'm.register' : 'm.signin')) + '</button>' +
@@ -204,28 +180,23 @@
     if (!a || !b) { showErr(ui('m.errName')); return; }
     if (String(p).length < 6) { showErr(ui('m.errPass')); return; }
     var name = a + ' ' + b, code = up && M.invite ? ($('#mCode', form).value || '').trim() : '';
-    var note = up ? (($('#mNote', form) || {}).value || '').trim() : '';
     if (up && M.invite && !code) { showErr(ui('m.errCode')); return; }
     showErr(''); busy(true);
     var first = up ? call('register', { name: name, pass: p, code: code }) : Promise.resolve();
     first.then(function () { return call('login', { name: name, pass: p }); }).then(function (r) {
-      setSession(r);
-      /* a note means "I am in the group": the request goes to the admins, and the person can read everything meanwhile */
-      return note ? call('askJoin', { note: note }).then(function () { S.role = 'ask'; store('rl', S.role); }, function () { /* the account exists; they can ask again later */ }) : null;
-    }).then(function () {
-      closeModal(); fetchedOnce = false; changed('auth'); refresh();
+      setSession(r); closeModal(); fetchedOnce = false; changed('auth'); refresh();
     }).then(null, function (e) { busy(false); showErr(e.message); });
   }
 
   /* ---------- account dialog ---------- */
   function accountBox() {
     openModal('<h2 id="mTitle">' + esc(ui('m.account')) + '</h2>' +
-      '<p class="who">' + esc(ui('m.signedAs', { name: S.name })) + (isAdmin() ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : isTeam() ? ' <span class="tag">' + esc(ui('m.team')) + '</span>' : S.role === 'ask' ? ' <span class="tag">' + esc(ui('m.waiting')) + '</span>' : ' <span class="tag">' + esc(ui('m.guest')) + '</span>') + '</p>' + joinLine() +
+      '<p class="who">' + esc(ui('m.signedAs', { name: S.name })) + (isAdmin() ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : isTeam() ? ' <span class="tag">' + esc(ui('m.team')) + '</span>' : '') + '</p>' +
       '<form id="mPassForm" class="mform" novalidate><h3>' + esc(ui('m.change')) + '</h3>' +
         pwField('mOld', ui('m.passOld'), 'current-password') + pwField('mNew', ui('m.passNew'), 'new-password') +
         '<p class="mform__err" id="mErr" role="alert" hidden></p><p class="mform__ok" id="mOk" role="status" hidden></p>' +
         '<button type="submit" class="btn btn--sm">' + esc(ui('m.change')) + '</button></form>' +
-      '<div class="mrow">' + (isAdmin() ? '<button type="button" class="btn btn--sm" data-m="members">' + esc(ui('m.members')) + (waitingCount() ? ' <span class="count">' + waitingCount() + '</span>' : '') + '</button>' : '') +
+      '<div class="mrow">' + (isAdmin() ? '<button type="button" class="btn btn--sm" data-m="members">' + esc(ui('m.members')) + '</button>' : '') +
       '<button type="button" class="btn btn--sm" data-m="signout">' + esc(ui('m.signout')) + '</button></div>');
   }
   function onPassSubmit() {
@@ -243,51 +214,16 @@
     openModal('<h2 id="mTitle">' + esc(ui('m.members')) + '</h2><div id="mList" class="mlist"><p class="muted">' + esc(ui('m.wait')) + '</p></div>');
     call('users').then(function (r) {
       var el = $('#mList'); if (!el) return;
-      var roster = rosterSet();
-      var self = function (u) { return String(u.name).toLowerCase() === String(S.name).toLowerCase(); };
-      var delBtn = function (u) { return '<button type="button" class="btn btn--sm btn--danger" data-m="del-user" data-name="' + esc(u.name) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>'; };
-      var setBtn = function (u, role, key, cls) { return '<button type="button" class="btn btn--sm' + (cls ? ' ' + cls : '') + '" data-m="setrole" data-name="' + esc(u.name) + '" data-role="' + role + '">' + esc(ui(key)) + '</button>'; };
-      var tick = function (u) { return roster[nameKey(u.name)] ? ' <span class="tick" title="' + esc(ui('m.onPeople')) + '" aria-label="' + esc(ui('m.onPeople')) + '">&#10003;</span>' : ''; };
-      var asks = r.users.filter(function (u) { return u.role === 'ask'; });
-      var group = r.users.filter(function (u) { return u.role === 'admin' || u.role === 'team'; });
-      var guests = r.users.filter(function (u) { return u.role !== 'admin' && u.role !== 'team' && u.role !== 'ask'; });
-      var askRow = function (u) {
-        return '<div class="mlist__row mlist__row--ask"><span class="mlist__who"><span><b>' + esc(u.name) + '</b>' + tick(u) + '</span>' + (u.note ? '<small>' + esc(u.note) + '</small>' : '') + '</span>' +
-          '<span class="mlist__act">' + setBtn(u, 'team', 'm.approve', 'btn--ok') + setBtn(u, 'member', 'm.decline', 'btn--ghost') + '</span></div>';
-      };
-      var row = function (u) {
-        var adm = u.role === 'admin', team = u.role === 'team';
-        var tag = adm ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : '';
-        /* admins are fixed in the backend; everybody else is either a guest or a group member */
-        var roleBtn = adm ? '' : setBtn(u, team ? 'member' : 'team', team ? 'm.removeMember' : 'm.makeMember');
-        return '<div class="mlist__row"><span>' + esc(u.name) + tag + (team || adm ? '' : tick(u)) + '</span>' +
-          (self(u) ? '' : '<span class="mlist__act">' + roleBtn + (adm ? '' : delBtn(u)) + '</span>') + '</div>';
-      };
-      var sec = function (key, n, body) { return '<h3 class="sub">' + esc(ui(key)) + ' <small>' + n + '</small></h3>' + body; };
-      el.innerHTML =
-        sec('m.sec.wait', asks.length, asks.length ? asks.map(askRow).join('') : '<p class="muted">' + esc(ui('m.noWait')) + '</p>') +
-        sec('m.sec.group', group.length, group.map(row).join('')) +
-        sec('m.sec.guest', guests.length, guests.map(row).join('') || '<p class="muted">' + esc(ui('m.lib.empty')) + '</p>');
+      el.innerHTML = r.users.map(function (u) {
+        var adm = u.role === 'admin', team = u.role === 'team', self = String(u.name).toLowerCase() === String(S.name).toLowerCase();
+        var tag = adm ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : team ? ' <span class="tag">' + esc(ui('m.team')) + '</span>' : '';
+        /* admins are fixed in the backend; everybody else is either a plain account or a group member */
+        var roleBtn = adm ? '' : '<button type="button" class="btn btn--sm" data-m="setrole" data-name="' + esc(u.name) + '" data-role="' + (team ? 'member' : 'team') + '">' + esc(ui(team ? 'm.removeMember' : 'm.makeMember')) + '</button>';
+        var delBtn2 = '<button type="button" class="btn btn--sm btn--danger" data-m="del-user" data-name="' + esc(u.name) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>';
+        return '<div class="mlist__row"><span>' + esc(u.name) + tag + '</span>' +
+          (self ? '' : '<span class="mlist__act">' + roleBtn + (adm ? '' : delBtn2) + '</span>') + '</div>';
+      }).join('') || '<p class="muted">' + esc(ui('m.lib.empty')) + '</p>';
     }).then(null, function (e) { var el = $('#mList'); if (el) el.innerHTML = '<p class="mform__err">' + esc(e.message) + '</p>'; });
-  }
-
-  /* ---------- ask to join the group ---------- */
-  function joinBox() {
-    openModal('<h2 id="mTitle">' + esc(ui('m.join.title')) + '</h2>' +
-      '<form id="mJoinForm" class="mform" novalidate>' +
-        '<p class="hint">' + esc(ui('m.join.hint')) + '</p>' +
-        '<label class="fld"><span>' + esc(ui('m.join.label')) + '</span><input id="jnNote" autocomplete="off" maxlength="200"></label>' +
-        '<p class="mform__err" id="mErr" role="alert" hidden></p>' +
-        '<button type="submit" class="btn">' + esc(ui('m.join.send')) + '</button></form>');
-  }
-  function onJoinSubmit() {
-    var note = ($('#jnNote').value || '').trim();
-    if (!note) { showErr(ui('m.join.need')); return; }
-    showErr(''); busy(true);
-    call('askJoin', { note: note }).then(function () {
-      S.role = isTeam() ? S.role : 'ask'; store('rl', S.role);
-      closeModal(); fetchedOnce = false; changed('role'); refresh();
-    }).then(null, function (e) { busy(false); showErr(e.message); });
   }
 
   /* two-step confirmation without browser dialogs */
@@ -316,7 +252,7 @@
       return '<button type="button" class="iconbtn acct" data-m="signin" title="' + esc(ui('m.signin')) + '" aria-label="' + esc(ui('m.signin')) + '">' + ICON_USER + '</button>';
     }
     var ini = String(S.name || '?').trim().charAt(0).toUpperCase();
-    return '<button type="button" class="iconbtn acct acct--on" data-m="account" title="' + esc(S.name) + '" aria-label="' + esc(ui('m.account') + ': ' + S.name) + '"><b>' + esc(ini) + '</b>' + (waitingCount() ? '<i class="acct__dot" aria-hidden="true"></i>' : '') + '</button>';
+    return '<button type="button" class="iconbtn acct acct--on" data-m="account" title="' + esc(S.name) + '" aria-label="' + esc(ui('m.account') + ': ' + S.name) + '"><b>' + esc(ini) + '</b></button>';
   }
 
   /* ---------- library ---------- */
@@ -406,10 +342,10 @@
     if (dbState === 'err' && !DB) body = '<p class="mform__err">' + esc(dbErr) + '</p><p><button type="button" class="btn btn--sm" data-m="retry">' + esc(ui('m.lib.retry')) + '</button></p>';
     else if (!DB) body = '<p class="muted">' + esc(ui('m.lib.loading')) + '</p>';
     else body = libGrid();
-    return '<div class="lib"><p class="muted lib__intro">' + esc(ui('m.lib.intro')) + '</p>' + joinLine() + demoNote() +
+    return '<div class="lib"><p class="muted lib__intro">' + esc(ui('m.lib.intro')) + '</p>' + demoNote() +
       '<div class="lib__bar"><label class="sr" for="libQ">' + esc(ui('m.lib.search')) + '</label>' +
       '<input id="libQ" class="search" type="search" autocomplete="off" placeholder="' + esc(ui('m.lib.search')) + '" value="' + esc(libQ) + '">' +
-      (isTeam() ? '<button type="button" class="btn btn--sm" data-m="upload">' + esc(ui('m.lib.upload')) + '</button>' : '') + '</div>' +
+      '<button type="button" class="btn btn--sm" data-m="upload">' + esc(ui('m.lib.upload')) + '</button></div>' +
       '<div id="libGrid">' + body + '</div></div>';
   }
 
@@ -417,7 +353,6 @@
   var UPQ = [];
   function uploadBox() {
     openModal('<h2 id="mTitle">' + esc(ui('m.lib.upload')) + '</h2>' + demoNote() +
-      '<p class="hint rights">' + esc(ui('m.rights')) + '</p>' +
       '<form id="mUpForm" class="mform" novalidate>' +
         '<label class="fld"><span>' + esc(ui('m.lib.fTitle')) + '</span><input id="upTitle" autocomplete="off"></label>' +
         '<label class="fld"><span>' + esc(ui('m.lib.fAuthor')) + '</span><input id="upAuthor" autocomplete="off"></label>' +
@@ -467,11 +402,53 @@
   function retry(fn, n) {
     return fn().then(null, function (e) { if (n > 0 && S.tok) return retry(fn, n - 1); throw e; });
   }
+  /* Browser -> Drive directly (real, smooth progress). The Apps Script only opens the session and records the book afterwards.
+     If the direct way is blocked, it falls back to the old way (chunks through Apps Script). */
+  var DIRECT_CH = 8388608; /* 8 MB = 32 x 256 KB (Drive wants multiples of 256 KB) */
+  var directBroken = false, paintAt = 0, paintTimer = 0;
+  function paintSoon() { /* progress events fire many times a second: repaint at most ~5 times a second */
+    var now = Date.now();
+    if (now - paintAt >= 200) { paintAt = now; paintUploads(); return; }
+    if (!paintTimer) paintTimer = setTimeout(function () { paintTimer = 0; paintAt = Date.now(); paintUploads(); }, 200);
+  }
+  function directFail(why) { var e = new Error(why); e.direct = true; return e; }
+  function putDirect(session, blob, start, end, total, onLoaded) {
+    return new Promise(function (resolve, reject) {
+      var x = new XMLHttpRequest();
+      x.open('PUT', session);
+      x.setRequestHeader('Content-Range', 'bytes ' + start + '-' + (end - 1) + '/' + total);
+      x.upload.onprogress = function (e) { if (e.lengthComputable) onLoaded(e.loaded); };
+      x.onload = function () { resolve({ status: x.status, text: x.responseText }); };
+      x.onerror = function () { reject(directFail('direct request blocked, status ' + x.status)); };
+      x.ontimeout = function () { reject(directFail('direct request timed out')); };
+      x.send(blob);
+    });
+  }
+  function uploadDirect(u, session) {
+    var total = u.f.size, pos = 0;
+    function next() {
+      var end = Math.min(pos + DIRECT_CH, total), base = pos;
+      return putDirect(session, u.f.slice(pos, end), pos, end, total, function (loaded) {
+        u.done = Math.min(total, base + loaded); paintSoon();
+      }).then(function (res) {
+        pos = end; u.done = pos;
+        if (res.status === 200 || res.status === 201) {
+          var meta; try { meta = JSON.parse(res.text); } catch (e) { throw directFail('bad response'); }
+          if (!meta || !meta.id) throw directFail('no file id');
+          return meta.id;
+        }
+        if (res.status !== 308) throw directFail('Drive answered ' + res.status);
+        if (pos >= total) throw directFail('upload not confirmed');
+        return next();
+      });
+    }
+    return next();
+  }
   function uploadFile(u) {
     var title = u.cat + '::' + ((u.one && u.title) || u.name.replace(/\.[^.]+$/, ''));
-    return call('upStart', { fileName: u.name, mime: u.f.type, size: u.f.size }).then(function (r) {
-      if (M.demo) return call('upPart', { url: r.url, start: 0, size: u.f.size, b64: '', title: title, author: u.author });
-      var pos = 0;
+    /* fallback: chunks through Apps Script */
+    function viaScript(r) {
+      var pos = 0; u.done = 0;
       function part() {
         var end = Math.min(pos + CH, u.f.size);
         return toB64(u.f.slice(pos, end)).then(function (data) {
@@ -479,6 +456,24 @@
         }).then(function () { pos = end; u.done = pos; paintUploads(); if (pos < u.f.size) return part(); });
       }
       return part();
+    }
+    var q = { fileName: u.name, mime: u.f.type, size: u.f.size };
+    if (!M.demo && !directBroken) q.origin = location.origin;
+    return call('upStart', q).then(function (r) {
+      if (M.demo) return call('upPart', { url: r.url, start: 0, size: u.f.size, b64: '', title: title, author: u.author });
+      if (r.direct && !directBroken) {
+        return uploadDirect(u, r.url).then(function (id) {
+          u.done = u.size; paintUploads();
+          return retry(function () { return call('upDone', { fileId: id, fileName: u.name, title: title, author: u.author }, 120000); }, 2);
+        }, function (e) {
+          if (!e || !e.direct) throw e;
+          directBroken = true; u.done = 0; paintUploads();
+          if (window.console) console.warn('Direct upload failed, using the fallback:', e.message);
+          return call('upStart', { fileName: u.name, mime: u.f.type, size: u.f.size }).then(viaScript);
+        });
+      }
+      if (r.direct === undefined || !r.direct) directBroken = true;
+      return viaScript(r);
     });
   }
   var upRunning = false, upBatchErr = false;
@@ -592,11 +587,10 @@
         packs.map(function (x) { return packBlock(x, embed, curId, curVid, rowsFn); }).join('');
     }
     return '<section class="course pls" id="course-members"><div class="pls__head"><h2>' + esc(ui('m.pl.title')) + '</h2>' +
-      (isTeam() ? '<button type="button" class="btn btn--sm" data-m="addlist">' + esc(ui('m.pl.add')) + '</button>' : '') + '</div><p>' + esc(ui('m.pl.intro')) + '</p>' + joinLine() + rows + '</section>';
+      (isTeam() ? '<button type="button" class="btn btn--sm" data-m="addlist">' + esc(ui('m.pl.add')) + '</button>' : '') + '</div><p>' + esc(ui('m.pl.intro')) + '</p>' + rows + '</section>';
   }
   function addListBox() {
     openModal('<h2 id="mTitle">' + esc(ui('m.pl.add')) + '</h2>' +
-      '<p class="hint rights">' + esc(ui('m.rights')) + '</p>' +
       '<form id="mListForm" class="mform" novalidate>' +
         '<label class="fld"><span>' + esc(ui('m.pl.url')) + '</span><input id="plUrl" autocomplete="off" inputmode="url" placeholder="https://youtu.be/…"></label>' +
         '<label class="fld"><span>' + esc(ui('m.pl.name')) + '</span><input id="plName" autocomplete="off"></label>' +
@@ -637,12 +631,11 @@
       body = r.length ? '<ul class="weblinks">' + r.map(webRow).join('') + '</ul>' : '<p class="muted">' + esc(ui('m.web.empty')) + '</p>';
     }
     return '<section class="shelf" id="webLinks"><div class="shelf__bar"><h3 class="shelf__h">' + esc(ui('m.web.title')) + '</h3>' +
-      (isTeam() ? '<button type="button" class="btn btn--sm" data-m="addlink">' + esc(ui('m.web.add')) + '</button>' : '') + '</div><p class="muted small">' + esc(ui('m.web.intro')) + '</p>' + joinLine() + body + '</section>';
+      '<button type="button" class="btn btn--sm" data-m="addlink">' + esc(ui('m.web.add')) + '</button></div><p class="muted small">' + esc(ui('m.web.intro')) + '</p>' + body + '</section>';
   }
   function addLinkBox() {
     var cur = curSub === 'other' ? 'gr' : curSub;
     openModal('<h2 id="mTitle">' + esc(ui('m.web.add')) + '</h2>' + demoNote() +
-      '<p class="hint rights">' + esc(ui('m.rights')) + '</p>' +
       '<form id="mLinkForm" class="mform" novalidate>' +
         '<label class="fld"><span>' + esc(ui('m.web.url')) + '</span><input id="wlUrl" autocomplete="off" inputmode="url" placeholder="https://…"></label>' +
         '<label class="fld"><span>' + esc(ui('m.web.name')) + '</span><input id="wlName" autocomplete="off"></label>' +
@@ -673,7 +666,6 @@
     if (act === 'close') { closeModal(); return; }
     if (act === 'signout') { closeModal(true); signOut(); return; }
     if (act === 'members') { membersBox(); return; }
-    if (act === 'joinask') { if (S.tok && !isTeam()) joinBox(); return; }
     if ((act === 'upload' || act === 'upopen' || act === 'addlist' || act === 'addlink') && !isTeam()) return; /* group members only; the backend refuses it too */
     if (act === 'upload' || act === 'upopen') { uploadBox(); return; }
     if (act === 'updock-x') { UPQ = UPQ.filter(function (u) { return u.st === 'run' || u.st === 'wait'; }); paintDock(); return; }
@@ -686,7 +678,7 @@
       return;
     }
     if (act === 'setrole') {
-      call('setRole', { name: el.getAttribute('data-name'), role: el.getAttribute('data-role') }).then(function () { membersBox(); fetchedOnce = false; refresh(); }, function (er) { showErr(er.message); });
+      call('setRole', { name: el.getAttribute('data-name'), role: el.getAttribute('data-role') }).then(membersBox, function (er) { showErr(er.message); });
       return;
     }
     if (act === 'del-user') {
@@ -710,7 +702,6 @@
     if (id === 'mForm') { e.preventDefault(); onAuthSubmit(f); }
     else if (id === 'mPassForm') { e.preventDefault(); onPassSubmit(); }
     else if (id === 'mUpForm') { e.preventDefault(); onUploadSubmit(); }
-    else if (id === 'mJoinForm') { e.preventDefault(); onJoinSubmit(); }
     else if (id === 'mListForm') { e.preventDefault(); onListSubmit(); }
     else if (id === 'mLinkForm') { e.preventDefault(); onLinkSubmit(); }
   });
@@ -735,7 +726,7 @@
     out: out,
     signedIn: function () { return !!S.tok; },
     isTeam: isTeam,
-    canBooks: function () { return true; }, /* the Books page is open to every signed-in guest; the lock screen covers signed-out visitors */
+    canBooks: function () { return !enabled || isTeam(); }, /* the Books page exists only for group members and admins */
     user: function () { return { name: S.name, role: S.role }; },
     needsLogin: needsLogin,
     lockHtml: lockHtml,
