@@ -30,7 +30,7 @@ window.SITE_CONFIG = {
     api: 'https://script.google.com/macros/s/AKfycbyRxXY7MZahAD_lwPG0rXuuH4XYSKXz5U4ycC9HoGVOwaYkTjWVUzdJxyN6gPU3Pg/exec',
     demo: false,
     invite: false,
-    protect: ['lectures']
+    protect: ['lectures', 'books']
   },
   uzAlphabet: 'new',
   defaultLang: 'auto',
