@@ -142,31 +142,61 @@
   }
 
   /* ---------- modal plumbing ---------- */
-  var modalEl = null, lastFocus = null, uploading = false;
+  var modalEl = null, lastFocus = null, uploading = false, listDirty = false;
+  function calm() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  function touchy() { return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); }
+  function focusFirst(o) {
+    /* on phones a focused field would pop the keyboard up in the middle of the animation, so the box itself takes the focus */
+    var f = (touchy() ? null : $('input:not([type=hidden]), select', o)) || $('button.btn', o) || $('.modal__x', o);
+    if (f) setTimeout(function () { try { f.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 90);
+  }
+  /* Changes what is inside the open dialog and glides the box from its old height to the new one (no close and reopen). */
+  function morphBox(change) {
+    var box = modalEl && $('.modal__box', modalEl);
+    if (!box || calm()) { change(); return; }
+    var h0 = box.getBoundingClientRect().height;
+    clearTimeout(box._mt);
+    box.style.transition = 'none'; box.style.height = ''; box.style.overflow = '';
+    change();
+    var h1 = box.getBoundingClientRect().height;
+    if (Math.abs(h0 - h1) < 1) return;
+    box.style.height = h0 + 'px'; box.style.overflow = 'hidden';
+    void box.offsetHeight;
+    box.style.transition = 'height .32s cubic-bezier(.16, 1, .3, 1)';
+    box.style.height = h1 + 'px';
+    box._mt = setTimeout(function () { box.style.transition = ''; box.style.height = ''; box.style.overflow = ''; }, 360);
+  }
   function openModal(html) {
-    closeModal(true);
+    /* a dialog is already on screen: swap its content smoothly instead of closing it and opening another one */
+    if (modalEl && modalEl.isConnected && !modalEl.classList.contains('is-closing')) {
+      var body = $('.modal__body', modalEl);
+      morphBox(function () { body.innerHTML = html; });
+      body.classList.remove('is-in'); void body.offsetWidth; body.classList.add('is-in');
+      focusFirst(modalEl);
+      return modalEl;
+    }
     lastFocus = document.activeElement;
     var o = document.createElement('div');
     o.className = 'modal';
     o.innerHTML = '<div class="modal__box" role="dialog" aria-modal="true" aria-labelledby="mTitle">' +
-      '<button type="button" class="modal__x" data-m="close" aria-label="' + esc(ui('m.close')) + '">&times;</button>' + html + '</div>';
+      '<button type="button" class="modal__x" data-m="close" aria-label="' + esc(ui('m.close')) + '">&times;</button><div class="modal__body">' + html + '</div></div>';
     o.addEventListener('mousedown', function (e) { if (e.target === o) closeModal(); });
     document.body.appendChild(o);
     document.body.classList.add('modal-open');
     modalEl = o;
-    var f = $('input:not([type=hidden]), select', o) || $('button.btn', o);
-    if (f) setTimeout(function () { try { f.focus(); } catch (e) { /* ignore */ } }, 30);
+    focusFirst(o);
     return o;
   }
   function closeModal(keepFocus) {
     if (!modalEl) return;
     var gone = modalEl; modalEl = null;
     document.body.classList.remove('modal-open');
-    /* fade and shrink out, then remove (no wait when the page asks for less motion, or a new dialog replaces this one) */
-    var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (calm || keepFocus === true) { gone.remove(); }
-    else { gone.classList.add('is-closing'); setTimeout(function () { gone.remove(); }, 230); }
-    if (!keepFocus && lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) { /* ignore */ } }
+    /* fade and shrink out, then remove (no wait when the page asks for less motion, or the dialog is replaced right away) */
+    if (calm() || keepFocus === true) { gone.remove(); }
+    else { gone.classList.add('is-closing'); setTimeout(function () { gone.remove(); }, 240); }
+    if (!keepFocus && lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
+    /* the page behind is refreshed only after the dialog is gone, so nothing heavy runs during the animation */
+    if (listDirty) { listDirty = false; fetchedOnce = false; setTimeout(refresh, calm() || keepFocus === true ? 0 : 280); }
   }
   function showErr(msg) { var el = $('#mErr', modalEl); if (el) { el.textContent = msg; el.hidden = !msg; } }
   function busy(on, label) {
@@ -239,37 +269,53 @@
   }
 
   /* ---------- admin: members list ---------- */
+  var memUsers = null, memFlash = '';
+  function paintMembers() {
+    var el = $('#mList'); if (!el || !memUsers) return;
+    var roster = rosterSet();
+    var self = function (u) { return String(u.name).toLowerCase() === String(S.name).toLowerCase(); };
+    var delBtn = function (u) { return '<button type="button" class="btn btn--sm btn--danger" data-m="del-user" data-name="' + esc(u.name) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>'; };
+    var setBtn = function (u, role, key, cls) { return '<button type="button" class="btn btn--sm' + (cls ? ' ' + cls : '') + '" data-m="setrole" data-name="' + esc(u.name) + '" data-role="' + role + '">' + esc(ui(key)) + '</button>'; };
+    var tick = function (u) { return roster[nameKey(u.name)] ? ' <span class="tick" title="' + esc(ui('m.onPeople')) + '" aria-label="' + esc(ui('m.onPeople')) + '">&#10003;</span>' : ''; };
+    var flash = function (u) { return memFlash && String(u.name) === memFlash ? ' is-flash' : ''; };
+    var asks = memUsers.filter(function (u) { return u.role === 'ask'; });
+    var group = memUsers.filter(function (u) { return u.role === 'admin' || u.role === 'team'; });
+    var guests = memUsers.filter(function (u) { return u.role !== 'admin' && u.role !== 'team' && u.role !== 'ask'; });
+    var askRow = function (u) {
+      return '<div class="mlist__row mlist__row--ask' + flash(u) + '"><span class="mlist__who"><span><b>' + esc(u.name) + '</b>' + tick(u) + '</span>' + (u.note ? '<small>' + esc(u.note) + '</small>' : '') + '</span>' +
+        '<span class="mlist__act">' + setBtn(u, 'team', 'm.approve', 'btn--ok') + setBtn(u, 'member', 'm.decline', 'btn--ghost') + '</span></div>';
+    };
+    var row = function (u) {
+      var adm = u.role === 'admin', team = u.role === 'team';
+      var tag = adm ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : '';
+      /* admins are fixed in the backend; everybody else is either a guest or a group member */
+      var roleBtn = adm ? '' : setBtn(u, team ? 'member' : 'team', team ? 'm.removeMember' : 'm.makeMember');
+      return '<div class="mlist__row' + flash(u) + '"><span>' + esc(u.name) + tag + (team || adm ? '' : tick(u)) + '</span>' +
+        (self(u) ? '' : '<span class="mlist__act">' + roleBtn + (adm ? '' : delBtn(u)) + '</span>') + '</div>';
+    };
+    var sec = function (key, n, body) { return '<h3 class="sub">' + esc(ui(key)) + ' <small>' + n + '</small></h3>' + body; };
+    el.innerHTML =
+      sec('m.sec.wait', asks.length, asks.length ? asks.map(askRow).join('') : '<p class="muted">' + esc(ui('m.noWait')) + '</p>') +
+      sec('m.sec.group', group.length, group.map(row).join('')) +
+      sec('m.sec.guest', guests.length, guests.map(row).join('') || '<p class="muted">' + esc(ui('m.lib.empty')) + '</p>');
+    memFlash = '';
+  }
   function membersBox() {
-    openModal('<h2 id="mTitle">' + esc(ui('m.members')) + '</h2><div id="mList" class="mlist"><p class="muted">' + esc(ui('m.wait')) + '</p></div>');
+    memUsers = null; memFlash = '';
+    openModal('<h2 id="mTitle">' + esc(ui('m.members')) + '</h2><p class="mform__err" id="mErr" role="alert" hidden></p><div id="mList" class="mlist"><p class="muted">' + esc(ui('m.wait')) + '</p></div>');
     call('users').then(function (r) {
-      var el = $('#mList'); if (!el) return;
-      var roster = rosterSet();
-      var self = function (u) { return String(u.name).toLowerCase() === String(S.name).toLowerCase(); };
-      var delBtn = function (u) { return '<button type="button" class="btn btn--sm btn--danger" data-m="del-user" data-name="' + esc(u.name) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>'; };
-      var setBtn = function (u, role, key, cls) { return '<button type="button" class="btn btn--sm' + (cls ? ' ' + cls : '') + '" data-m="setrole" data-name="' + esc(u.name) + '" data-role="' + role + '">' + esc(ui(key)) + '</button>'; };
-      var tick = function (u) { return roster[nameKey(u.name)] ? ' <span class="tick" title="' + esc(ui('m.onPeople')) + '" aria-label="' + esc(ui('m.onPeople')) + '">&#10003;</span>' : ''; };
-      var asks = r.users.filter(function (u) { return u.role === 'ask'; });
-      var group = r.users.filter(function (u) { return u.role === 'admin' || u.role === 'team'; });
-      var guests = r.users.filter(function (u) { return u.role !== 'admin' && u.role !== 'team' && u.role !== 'ask'; });
-      var askRow = function (u) {
-        return '<div class="mlist__row mlist__row--ask"><span class="mlist__who"><span><b>' + esc(u.name) + '</b>' + tick(u) + '</span>' + (u.note ? '<small>' + esc(u.note) + '</small>' : '') + '</span>' +
-          '<span class="mlist__act">' + setBtn(u, 'team', 'm.approve', 'btn--ok') + setBtn(u, 'member', 'm.decline', 'btn--ghost') + '</span></div>';
-      };
-      var row = function (u) {
-        var adm = u.role === 'admin', team = u.role === 'team';
-        var tag = adm ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : '';
-        /* admins are fixed in the backend; everybody else is either a guest or a group member */
-        var roleBtn = adm ? '' : setBtn(u, team ? 'member' : 'team', team ? 'm.removeMember' : 'm.makeMember');
-        return '<div class="mlist__row"><span>' + esc(u.name) + tag + (team || adm ? '' : tick(u)) + '</span>' +
-          (self(u) ? '' : '<span class="mlist__act">' + roleBtn + (adm ? '' : delBtn(u)) + '</span>') + '</div>';
-      };
-      var sec = function (key, n, body) { return '<h3 class="sub">' + esc(ui(key)) + ' <small>' + n + '</small></h3>' + body; };
-      el.innerHTML =
-        sec('m.sec.wait', asks.length, asks.length ? asks.map(askRow).join('') : '<p class="muted">' + esc(ui('m.noWait')) + '</p>') +
-        sec('m.sec.group', group.length, group.map(row).join('')) +
-        sec('m.sec.guest', guests.length, guests.map(row).join('') || '<p class="muted">' + esc(ui('m.lib.empty')) + '</p>');
+      if (!$('#mList')) return;
+      memUsers = r.users || [];
+      morphBox(paintMembers);
     }).then(null, function (e) { var el = $('#mList'); if (el) el.innerHTML = '<p class="mform__err">' + esc(e.message) + '</p>'; });
   }
+  /* A button that waits for the server: it shows a spinner and cannot be pressed twice. */
+  function pend(btn, on) {
+    if (!btn) return;
+    btn.classList.toggle('is-busy', !!on); btn.disabled = !!on;
+    if (on) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy');
+  }
+  function userByName(n) { return (memUsers || []).filter(function (u) { return String(u.name) === String(n); })[0]; }
 
   /* ---------- ask to join the group ---------- */
   function joinBox() {
@@ -746,12 +792,28 @@
       return;
     }
     if (act === 'setrole') {
-      call('setRole', { name: el.getAttribute('data-name'), role: el.getAttribute('data-role') }).then(function () { membersBox(); fetchedOnce = false; refresh(); }, function (er) { showErr(er.message); });
+      if (el.disabled) return;
+      var nm = el.getAttribute('data-name'), rl = el.getAttribute('data-role');
+      pend(el, true); showErr('');
+      call('setRole', { name: nm, role: rl }).then(function () {
+        var u = userByName(nm);
+        if (u) { if (u.role === 'ask' && DB && +DB.waiting > 0) DB.waiting = +DB.waiting - 1; u.role = rl; }
+        memFlash = nm; listDirty = true;
+        morphBox(paintMembers);
+      }, function (er) { pend(el, false); showErr(er.message); });
       return;
     }
     if (act === 'del-user') {
-      if (!armed(el)) return;
-      call('delUser', { name: el.getAttribute('data-name') }).then(membersBox, function () { /* shown by next load */ });
+      if (el.disabled || !armed(el)) return;
+      var dn = el.getAttribute('data-name');
+      pend(el, true); showErr('');
+      call('delUser', { name: dn }).then(function () {
+        var u = userByName(dn);
+        if (u && u.role === 'ask' && DB && +DB.waiting > 0) DB.waiting = +DB.waiting - 1;
+        memUsers = (memUsers || []).filter(function (x) { return String(x.name) !== String(dn); });
+        listDirty = true;
+        morphBox(paintMembers);
+      }, function (er) { pend(el, false); showErr(er.message); });
       return;
     }
     if (act === 'del-book') {

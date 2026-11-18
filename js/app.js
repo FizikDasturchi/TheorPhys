@@ -873,6 +873,7 @@
     if (e.target && e.target.id === 'autoNext') { autoNext = !!e.target.checked; store('autonext', autoNext ? '1' : '0'); }
   });
   document.addEventListener('visibilitychange', function () { if (document.hidden && lect.ctl) flushNow('beacon'); });
+  document.addEventListener('touchstart', function () {}, { passive: true }); /* lets iOS Safari show the pressed look of buttons */
   window.addEventListener('pagehide', function () { if (lect.ctl) flushNow('beacon'); });
   /* a portrait that fails to load falls back to the initials badge */
   function ytFallback(img) { /* cover chain: maxresdefault -> hqdefault -> nothing (the dark poster stays) */

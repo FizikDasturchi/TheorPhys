@@ -179,7 +179,7 @@
     function frame(now) {
       raf = 0;
       if (!alive) return;
-      if (visible && !document.hidden && (!reduce || dirty)) {
+      if (visible && !document.hidden && !document.body.classList.contains('modal-open') && (!reduce || dirty)) {
         draw(now);
         dirty = false;
         frames++; acc += now - last;

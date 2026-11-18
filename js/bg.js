@@ -152,7 +152,7 @@
     raf = 0;
     if (!cv || !cssReady() || document.hidden) return;
     if (!reduce()) {
-      if (now - last >= 33) { last = now; draw(now); }  /* about 30 frames per second is plenty for a backdrop */
+      if (now - last >= 33 && !document.body.classList.contains('modal-open')) { last = now; draw(now); } /* frozen behind an open dialog */  /* about 30 frames per second is plenty for a backdrop */
       raf = window.requestAnimationFrame(frame);
     }
   }
