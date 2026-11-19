@@ -79,24 +79,36 @@
           lists: db.Lists.map(function (l) { return { id: l.id, title: l.title, pl: l.pl, by: l.by, mine: team && (admin || l.by === user.name) }; }),
           prog: db.Prog.filter(function (p) { return p.key === user.key; }).map(function (p) { return { pl: p.pl, i: p.i, t: p.t }; })
         };
+      case 'me': return { role: user.role, waiting: admin ? db.Users.filter(function (x) { return x.role === 'ask'; }).length : 0 };
       case 'upStart':
         needTeam();
+        /* same rule as the real backend: PDF files only, up to 200 MB */
+        if (!/\.pdf$/i.test(String(q.fileName || '').trim())) throw 'Fayl PDF emas (faqat .pdf)';
         if (!(+q.size > 0)) throw "Fayl bo'sh";
+        if (+q.size > 200 * 1048576) throw "Fayl juda katta (eng ko'pi 200 MB)";
         return { url: 'https://www.googleapis.com/upload/drive/v3/files?demo=1' };
       case 'upPart':
         needTeam();
         if (!/^https:\/\/www\.googleapis\.com\/upload\/drive\/v3\/files\?/.test(q.url)) throw "Noto'g'ri so'rov";
         var got = q.b64 ? Math.floor(String(q.b64).length * 3 / 4) - (String(q.b64).slice(-2) === '==' ? 2 : String(q.b64).slice(-1) === '=' ? 1 : 0) : (+q.size || 0);
         if ((+q.start || 0) + got < (+q.size || 0)) return done({ ok: 1 }); /* more chunks to come */
-        db.Books.push({ id: uid(), title: q.title || 'file', author: q.author || '', fileId: 'demo-' + uid().slice(0, 6), by: user.name, at: Date.now() }); dirty = true;
-        return done({ ok: 1, done: 1 });
+        var nb = { id: uid(), title: q.title || 'file', author: q.author || '', fileId: 'demo-' + uid().slice(0, 6), by: user.name, at: Date.now() };
+        db.Books.push(nb); dirty = true;
+        return done({ ok: 1, done: 1, rec: { id: nb.id, title: nb.title, author: nb.author, fileId: nb.fileId, by: nb.by } });
       case 'delBook': {
         needTeam();
         var b = db.Books.filter(function (x) { return x.id === q.id; })[0];
         if (!b || !(admin || b.by === user.name)) throw "Ruxsat yo'q";
         db.Books = db.Books.filter(function (x) { return x.id !== q.id; }); dirty = true; return done({ ok: 1 });
       }
-      case 'addList': needTeam(); db.Lists.push({ id: uid(), title: q.title, pl: q.pl, by: user.name }); dirty = true; return done({ ok: 1 });
+      case 'addList': {
+        needTeam();
+        var plv = String(q.pl || '').trim();
+        if (!(/^v:[\w-]{11}$/.test(plv) || /^(PL|UU|FL|OL|LL|RD)[\w-]{10,64}$/.test(plv) || /^u:https?:\/\/[^\s<>"']{4,500}$/.test(plv))) throw "Havola noto'g'ri (YouTube video yoki pleylist kerak)";
+        if (db.Lists.some(function (x) { return String(x.pl) === plv && (plv.indexOf('u:') !== 0 || x.title === q.title); })) throw "Bu allaqachon qo'shilgan";
+        var nl = { id: uid(), title: String(q.title || 'YouTube').slice(0, 200), pl: plv, by: user.name };
+        db.Lists.push(nl); dirty = true; return done({ ok: 1, rec: { id: nl.id, title: nl.title, pl: nl.pl, by: nl.by } });
+      }
       case 'delList': {
         needTeam();
         var l = db.Lists.filter(function (x) { return x.id === q.id; })[0];

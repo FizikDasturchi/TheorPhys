@@ -154,7 +154,8 @@
     $('#site-footer').innerHTML = band() +
       '<div class="wrap foot">' +
         '<div class="foot__brand"><span class="brand__logo">' + ICON.logo + '</span><b>' + esc(ui('nav.brand')) + '</b></div>' +
-        '<p>' + esc(ui('footer.text', { date: fmtDate(CFG.lastUpdated) })) + '</p>' +
+        '<p>' + esc(ui('footer.text')) + '</p>' +
+        '<p class="foot__meta">' + esc(ui('footer.upd', { date: fmtDate(CFG.lastUpdated) })) + '</p>' +
         (I.lang === 'uz' ? '<p class="foot__law">' + esc(ui('footer.law')) + ' ' + alphaBtn + '</p>' : '') +
       '</div>';
     $('#skipbtn').textContent = ui('skip');
@@ -930,8 +931,28 @@
     var last = store('last');
     if (last && !applyLast(last)) state.wantKey = last;
     if (SM) {
-      SM.out.onChange = function (why) {
-        if (why === 'data') { var ab = document.querySelector('.tools .acct'); if (ab && SM.accountButton) { var tmp = document.createElement('div'); tmp.innerHTML = SM.accountButton(); if (tmp.firstChild) ab.replaceWith(tmp.firstChild); } } /* the "someone is waiting" dot follows the data, even when the page itself is refreshed in place */
+      SM.out.onChange = function (why, arg) {
+        if (why === 'data' || why === 'dot') { var ab = document.querySelector('.tools .acct'); if (ab && SM.accountButton) { var tmp = document.createElement('div'); tmp.innerHTML = SM.accountButton(); if (tmp.firstChild) ab.replaceWith(tmp.firstChild); } } /* the "someone is waiting" dot follows the data, even when the page itself is refreshed in place */
+        if (why === 'dot') return; /* only the little dot on the account button changed */
+        if (why === 'add') { /* new item(s): repaint at once, then let them fade in while the rest slide aside */
+          var snap = SM.snapshot();
+          if (state.route === 'books' && $('#booksPane')) repaintBooks();
+          else if (state.route === 'lectures' && $('#course-members')) { var sc = $('#course-members'); sc.outerHTML = membersHtml(); paintAll(); }
+          else { renderAll(false); return; }
+          SM.reveal(snap, arg);
+          return;
+        }
+        if (why === 'prune') { /* an item was deleted and has already left the page: only the counts and the empty messages need repainting */
+          if (state.route === 'books' && $('#booksPane')) {
+            var md = $('#booksModes'); if (md) md.innerHTML = booksModes();
+            if ($('#groupLib') && !$('#groupLib .libcard')) $('#groupLib').innerHTML = SM.libraryHtml();
+            if ($('#webLinks') && !$('#webLinks li')) repaintBooks();
+          } else if (state.route === 'lectures') {
+            var ms = $('#course-members');
+            if (ms && !ms.querySelector('li, .mpl')) { ms.outerHTML = membersHtml(); paintAll(); }
+          }
+          return;
+        }
         if (why === 'data' && state.restored) { state.restored = false; if (state.route === 'lectures') { renderAll(false); return; } }
         if (why === 'data') { /* refresh in place so a playing video is not interrupted */
           if (state.route === 'lectures' && lect.ctl) {

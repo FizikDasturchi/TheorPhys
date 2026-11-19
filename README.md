@@ -28,10 +28,15 @@ Roles (the backend enforces them, the pages only follow):
 1. A new person signs up. The form has an optional line, "Are you in the group?": a professor or group member writes the
    supervisor's name or a Scopus ID there. (Anybody who skipped it can press **Ask to join the group** later, on the Books or Lectures page or in the account dialog.)
 2. They can read everything straight away. Their account shows "waiting for approval".
-3. Admins see a small dot on the account button and a number on the **Members** button. In Members, the **Waiting for approval** box is at the top:
+3. **The dot on the account button follows the answer by itself, without reloading the page.** Admins see a **red** dot (and a number on the **Members** button)
+   while somebody waits; the Members list also fills in by itself when a new request arrives. The person who asked sees a red dot too, until an admin answers:
+   after **Approve** it turns **green** with a short message ("You were approved…") and the upload and add buttons appear on the open page; after **Decline** the dot
+   disappears with a message. The green dot goes away once the person opens their account dialog. (The page asks the server a tiny question, `me`, every 12 seconds while the tab is open and visible,
+   and every 24 seconds for ordinary guests; change it with `poll: 12000` inside `members` in `js/config.js`. A hidden tab does not ask.)
+   In Members, the **Waiting for approval** box is at the top: In Members, the **Waiting for approval** box is at the top:
    each request shows the name and the note, a tick when the name is on the People page, and **Approve** / **Decline**.
    Only admins see this box, and the backend refuses everybody else.
-4. After **Approve** the person is a group member (on their next page load or refresh they get the upload and add buttons).
+4. After **Approve** the person is a group member (the buttons appear within seconds).
    **Remove from group** (or **Make member** for someone who never asked) works at any time in the same list.
 
 The tick is only a hint for the admin, because the names on the People page are public. The decision is always the admin's.
@@ -87,7 +92,9 @@ The Books page opens with a **Subject** row: Vectors and tensors, Classical mech
 relativity, Quantum mechanics, Mathematical methods, Black holes and lensing. Under it are two options, which
 show whatever belongs to the chosen subject:
 
-**Group resources** are the files group members uploaded. Any signed-in person can open and download them; only group members can upload a book or notes under any of
+**Group resources** are the files group members uploaded. **Only PDF files are accepted** (up to 200 MB each): the file picker offers only PDFs, the page
+refuses anything else before it is sent (wrong type, an empty file, or a file called `.pdf` that is not a PDF inside), and the backend checks the same thing again, so a
+video, a Word file or a renamed file cannot get in by any route. Files are PDF-only on purpose; videos belong on the Lectures page (as YouTube links). Any signed-in person can open and download them; only group members can upload a book or notes under any of
 the seven subjects (the dialog preselects the subject being viewed). Files are stored on the group's Google Drive.
 The search box looks in every subject, because a book may have been filed elsewhere. Older uploads that had no
 subject, or the old "Other" section, appear under an extra **Other** chip that is only shown when such files exist.
@@ -131,7 +138,7 @@ Portrait photos work best, about 600 x 750 px. To use other file names, change `
 
 ## Edit it
 - `js/data.js`   members, publications, courses and videos, books, news, reading roadmap
-- `js/config.js` contact email, YouTube channel, "last updated" date, Uzbek alphabet default,
+- `js/config.js` contact email (shown on the Join page), YouTube channel, "last updated" date (shown in the footer; the institute line in the footer is `footer.text` in `js/i18n.js`), Uzbek alphabet default,
                  tile band on/off (`ornament`), sign-in settings (`members`)
 - `js/i18n.js`   interface text in Uzbek / Russian / English, including the group name (`nav.brand`)
 
@@ -182,6 +189,31 @@ The search box finds Cyrillic and Latin spellings of the same word (`fold()` in 
 ## Uploads
 Books are uploaded in the background: a small panel in the corner shows the progress even when the dialog is closed, the dialog
 closes by itself when every file is uploaded (it stays open if a file failed), and more files can be added while others upload.
+
+What makes it smooth:
+- The file goes from the browser **straight to Google Drive** in 8 MB pieces (the Apps Script only opens the upload and records the book afterwards), with real progress, speed (MB/s) and time left.
+- A bad connection does not start it again from zero: every piece is retried up to 6 times with growing pauses, Drive is asked how much it already has, and when the internet is off the upload waits and carries on by itself when it is back.
+- Up to 2 files go at the same time; the others wait their turn. Every row has a **×** to cancel it and the panel has **Cancel all**.
+- If Drive cannot be reached from a browser at all (a strict network), that upload goes through the Apps Script in pieces, which is slower; Drive is tried directly again after 5 minutes.
+- For direct upload, `ALLOWED_ORIGINS` in `code.gs` must contain the address of the site (`https://theorphys.uz`, and the `github.io` address if it is used).
+
+## Deleting files, videos and links
+**Delete** (on a file, a video, a playlist or a link) opens a small dialog with the name of the item and two buttons, **Cancel** and **Delete**. One click on **Delete** is enough:
+the item fades out at once, the rest slide into the gap, and the server is told in the background, so nothing on the page reloads. If the server refuses
+(for example the person is not allowed to delete it), the item comes back with a short message. Members can delete their own items; admins can delete any.
+(Removing a person from the Members list still uses the "click again to confirm" button.)
+
+## New items appear at once
+When a file, video, playlist or link is added, it shows up on the page **immediately** and glides in (it fades in, the neighbours move aside, and it glows for a moment), without waiting for the
+server to be asked again and without redrawing the page. A quiet check with the server follows a few seconds later and only redraws if something really differs.
+The new `code.gs` sends the saved record back (`rec`: id, title, …), so the new item has its real id straight away and can be deleted at once. With an older `code.gs` the item still appears at once,
+but gets its real id after the quiet check (one small redraw). To get the exact path, redeploy: **Deploy > Manage deployments > Edit > New version > Deploy**.
+
+## Videos on the Lectures page
+Videos are **not uploaded** to the site: a member adds a **YouTube link** (a video, or a playlist), and the video stays on YouTube. Only YouTube links are accepted
+(youtube.com, youtu.be, or a bare video / playlist id); anything else, or a link that is already on the list, is refused both on the page and in the backend.
+While the link is typed, the dialog shows a small preview (picture and title) from YouTube, or says why it cannot be used (private or deleted video, or a video whose owner does not allow
+showing it on other sites).
 
 ## Home page
 The card "Video lectures" shows the cover of the first lecture (from YouTube, with a fallback to the dark poster). With `embedVideos: false` no image is requested.

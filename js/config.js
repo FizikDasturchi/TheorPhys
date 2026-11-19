@@ -9,6 +9,8 @@
  *               demo     true  -> accounts are simulated inside the browser (for previews and tests only)
  *               invite   true  -> the sign-up form asks for a group access code and sends it as `code`;
  *                        your backend must check it (README shows the one-line change)
+ *               poll     (optional) how often, in milliseconds, the page asks the server whether a join request was answered, for the red / green
+ *                        dot on the account button. Default 12000; guests who have not asked are checked half as often. A hidden tab does not ask.
  *               protect  pages that need a signed-in account: any of 'people', 'research', 'publications',
  *                        'lectures', 'start', 'join'  (use [] to keep every page public).
  *                        The Books page is open to everybody; the files shared by the group inside it need a
@@ -37,5 +39,5 @@ window.SITE_CONFIG = {
   youtubeApiKey: '',
   email: 'ahmadjon@astrin.uz',
   youtubeChannel: 'https://www.youtube.com/@nazariyastrofizika',
-  lastUpdated: '2026-11-15'
+  lastUpdated: '2026-11-19'
 };

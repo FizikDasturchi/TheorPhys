@@ -11,6 +11,9 @@
   var enabled = !!(M.api || M.demo);
   var PROTECT = M.protect || [];
   var CH = 3932160; /* upload chunk: multiple of 256 KB and of 3 (base64), as the backend expects */
+  var MAX_PDF = 209715200; /* 200 MB per PDF, the same limit as the backend */
+  var UP_PAR = 2; /* files uploaded at the same time */
+  var POLL_MS = +M.poll || 12000; /* how often the page asks the server whether the role / the waiting requests changed */
 
   var S = { tok: '', name: '', role: '' };
   var DB = null, dbState = 'idle', dbErr = '', loadPromise = null, fetchedOnce = false;
@@ -29,7 +32,7 @@
     } catch (e) { /* storage unavailable: the session then lives in memory only */ }
     return null;
   }
-  function changed(why) { try { out.onChange(why); } catch (e) { if (window.console) console.error(e); } }
+  function changed(why, arg) { try { out.onChange(why, arg); } catch (e) { if (window.console) console.error(e); } }
 
   var ICON_USER = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 20c.9-4 4-5.6 7.5-5.6s6.6 1.6 7.5 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   var ICON_LOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
@@ -71,10 +74,12 @@
   function setSession(r) {
     S.tok = r.token; S.name = r.name; S.role = r.role;
     store('tok', S.tok); store('nm', S.name); store('rl', S.role);
+    greenDot = false; store('gr', null); schedulePoll();
   }
   function signOut() {
     S.tok = S.name = S.role = '';
-    ['tok', 'nm', 'rl', 'dc'].forEach(function (k) { store(k, null); });
+    ['tok', 'nm', 'rl', 'dc', 'gr'].forEach(function (k) { store(k, null); });
+    greenDot = false; clearTimeout(pollTimer);
     DB = null; dbState = 'idle'; fetchedOnce = false; libQ = '';
     try { out.onSignOut(); } catch (e) { /* ignore */ }
     changed('signout');
@@ -84,7 +89,8 @@
   var ERRMAP = [
     [/^auth$/, 'm.errAuth'], [/^Ism yoki parol/, 'm.errCreds'], [/^Ko'p urinish/, 'm.errTries'],
     [/^Bunday a'zo bor/, 'm.errExists'], [/^Parol kamida/, 'm.errPass'], [/^Ism va familiyani/, 'm.errName'],
-    [/^Juda ko'p urinish/, 'm.errReg'], [/^Faqat adminlar|^Ruxsat yo'q/, 'm.errPerm']
+    [/^Juda ko'p urinish/, 'm.errReg'], [/^Faqat adminlar|^Ruxsat yo'q/, 'm.errPerm'],
+    [/^Fayl PDF emas/, 'm.errNotPdf'], [/^Fayl juda katta/, 'm.errBig'], [/^Havola noto'g'ri/, 'm.pl.bad'], [/^Bu allaqachon/, 'm.pl.dup']
   ];
   function mapErr(msg) {
     for (var i = 0; i < ERRMAP.length; i++) if (ERRMAP[i][0].test(msg)) return ui(ERRMAP[i][1]);
@@ -110,7 +116,7 @@
       }
       return r;
     }, function (e) {
-      throw new Error(e && e.name === 'AbortError' ? ui('m.timeout') : ui('m.network'));
+      var er = new Error(e && e.name === 'AbortError' ? ui('m.timeout') : ui('m.network')); er.net = true; throw er;
     });
   }
 
@@ -121,7 +127,7 @@
     dbState = 'loading'; dbErr = ''; fetchedOnce = true;
     loadPromise = call('data').then(function (r) {
       var roleMoved = r && r.role && r.role !== S.role; /* an admin changed this person's role since the last visit */
-      if (roleMoved) { S.role = r.role; store('rl', S.role); }
+      if (roleMoved) { noteRole(S.role, r.role); S.role = r.role; store('rl', S.role); }
       DB = r; dbState = 'ok'; store('dc', JSON.stringify(r));
       try { out.onData(r); } catch (e) { /* ignore */ }
       changed(roleMoved ? 'role' : 'data');
@@ -135,6 +141,81 @@
     return loadPromise;
   }
   function ensureData() { if (S.tok && !fetchedOnce && dbState !== 'loading') refresh(); }
+
+  /* ---------- the dot on the account button: red = a request waits, green = you were approved ----------
+     The page asks the server a tiny question ("me") every few seconds while the tab is open, so the dot changes by itself,
+     without reloading. Admins see red while somebody waits; a guest who asked sees red until an admin answers, then green. */
+  var greenDot = store('gr') === '1', pollTimer = 0, pollBusy = false, pollFails = 0, pollAt = 0;
+  function dotKind() {
+    if (!S.tok) return '';
+    if (isAdmin()) return waitingCount() ? 'red' : '';
+    if (S.role === 'ask') return 'red';
+    return greenDot ? 'green' : '';
+  }
+  function dotTitle(k) { return k === 'green' ? ui('m.dot.approved') : isAdmin() ? ui('m.dot.admin', { n: waitingCount() }) : ui('m.dot.wait'); }
+  function toast(msg, kind) {
+    var t = document.getElementById('mToast');
+    if (!t) {
+      t = document.createElement('div'); t.id = 'mToast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite');
+      document.body.appendChild(t);
+    }
+    t.className = 'mtoast mtoast--' + (kind || 'info'); t.textContent = msg;
+    void t.offsetWidth; t.classList.add('is-in');
+    clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('is-in'); }, 8000);
+  }
+  function noteRole(was, now) { /* the role changed on the server: tell the person */
+    if (!was || was === now) return;
+    if (now === 'team' && was !== 'admin') { greenDot = true; store('gr', '1'); toast(ui('m.dot.approved'), 'ok'); }
+    else if (now === 'member' && was === 'ask') toast(ui('m.dot.declined'), 'info');
+    else if (now === 'member' && was === 'team') { greenDot = false; store('gr', null); toast(ui('m.dot.removed'), 'info'); }
+  }
+  function nextDelay() {
+    var base = (isAdmin() || S.role === 'ask') ? POLL_MS : POLL_MS * 2; /* those who wait for an answer, and the admins who give it, are asked more often */
+    return Math.min(base * Math.pow(2, Math.min(pollFails, 3)), 120000);
+  }
+  function schedulePoll() {
+    clearTimeout(pollTimer);
+    if (!S.tok || !enabled) return;
+    pollTimer = setTimeout(function () { poll(false); }, nextDelay());
+  }
+  function poll(force) {
+    clearTimeout(pollTimer);
+    if (!S.tok) return;
+    if ((document.hidden && !force) || pollBusy) { schedulePoll(); return; } /* a hidden tab does not ask */
+    pollBusy = true; pollAt = Date.now();
+    call('me', null, 20000).then(function (r) { pollBusy = false; pollFails = 0; applyMe(r); schedulePoll(); },
+      function () { pollBusy = false; pollFails++; schedulePoll(); });
+  }
+  function pollSoon() { if (S.tok && !pollBusy && Date.now() - pollAt > 2500) poll(true); }
+  function applyMe(r) {
+    if (!r || !S.tok) return;
+    var w = +r.waiting || 0;
+    if (r.role && r.role !== S.role) {
+      noteRole(S.role, r.role);
+      S.role = r.role; store('rl', S.role);
+      fetchedOnce = false; refresh(); /* fresh data and the add buttons appear (or go) in place, a playing video is not interrupted */
+      changed('dot');
+      return;
+    }
+    if (isAdmin() && DB && (+DB.waiting || 0) !== w) {
+      var more = w > (+DB.waiting || 0);
+      DB.waiting = w; changed('dot');
+      if (more) toast(ui('m.dot.admin', { n: w }), 'info');
+      liveMembers();
+    }
+  }
+  function liveMembers() { /* the member list is open and somebody asked (or another admin answered): update it in place */
+    if (!$('#mList') || !memUsers || $('#mList .is-busy') || $('#mList .is-armed')) return;
+    call('users').then(function (r) {
+      if (!$('#mList') || $('#mList .is-busy') || $('#mList .is-armed')) return;
+      var had = {}; memUsers.forEach(function (u) { if (u.role === 'ask') had[u.name] = 1; });
+      var fresh = r.users || [], added = fresh.filter(function (u) { return u.role === 'ask' && !had[u.name]; })[0];
+      memUsers = fresh; memFlash = added ? added.name : ''; morphBox(paintMembers);
+    }, function () { /* the next check tries again */ });
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) pollSoon(); });
+  window.addEventListener('focus', pollSoon);
+  window.addEventListener('online', pollSoon);
   function saveProg(key, i, t, beacon) {
     if (!S.tok || !key) return;
     var p = call('prog', { pl: key, i: i, t: Math.floor(t) }, 20000, !!beacon);
@@ -249,7 +330,9 @@
 
   /* ---------- account dialog ---------- */
   function accountBox() {
-    openModal('<h2 id="mTitle">' + esc(ui('m.account')) + '</h2>' +
+    var fresh = greenDot; /* the green dot is "seen" once the account dialog is opened */
+    if (greenDot) { greenDot = false; store('gr', null); changed('dot'); }
+    openModal('<h2 id="mTitle">' + esc(ui('m.account')) + '</h2>' + (fresh ? '<p class="mform__ok">' + esc(ui('m.dot.approvedLong')) + '</p>' : '') +
       '<p class="who">' + esc(ui('m.signedAs', { name: S.name })) + (isAdmin() ? ' <span class="tag">' + esc(ui('m.admin')) + '</span>' : isTeam() ? ' <span class="tag">' + esc(ui('m.team')) + '</span>' : S.role === 'ask' ? ' <span class="tag">' + esc(ui('m.waiting')) + '</span>' : ' <span class="tag">' + esc(ui('m.guest')) + '</span>') + '</p>' + joinLine() +
       '<form id="mPassForm" class="mform" novalidate><h3>' + esc(ui('m.change')) + '</h3>' +
         pwField('mOld', ui('m.passOld'), 'current-password') + pwField('mNew', ui('m.passNew'), 'new-password') +
@@ -347,6 +430,60 @@
     return false;
   }
 
+  /* ---------- deleting a file, video, playlist or link ----------
+     One dialog ("Delete?" / "Cancel"), then ONE click: the item leaves the page at once (fading out while the others slide into the gap), and the
+     server is told in the background. Nothing on the page is reloaded. Only if the server refuses does the item come back, with a message. */
+  function qa(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+  function itemBox(btn) { return btn && btn.closest ? btn.closest('.mpl, li, .libcard') : null; }
+  function itemTitle(box) { var h = box && box.querySelector('h3, h4, b'); return h ? h.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function askDelete(btn) {
+    var box = itemBox(btn), kind = btn.getAttribute('data-m') === 'del-book' ? 'book' : box && box.classList.contains('weblink') ? 'link' : 'list', id = btn.getAttribute('data-id'), title = itemTitle(box);
+    openModal('<h2 id="mTitle">' + esc(ui(kind === 'book' ? 'm.del.bookT' : kind === 'link' ? 'm.del.linkT' : 'm.del.listT')) + '</h2>' +
+      (title ? '<p class="mdel__what">' + esc(title) + '</p>' : '') +
+      '<p class="hint">' + esc(ui(kind === 'book' ? 'm.del.bookP' : kind === 'link' ? 'm.del.linkP' : 'm.del.listP')) + '</p>' +
+      '<div class="mdel__act"><button type="button" class="btn" data-m="close">' + esc(ui('m.cancel')) + '</button>' +
+      '<button type="button" class="btn btn--danger" data-m="del-yes" data-kind="' + kind + '" data-id="' + esc(id) + '" data-title="' + esc(title) + '">' + esc(ui('m.delete')) + '</button></div>');
+    var c = $('.mdel__act .btn', modalEl); if (c) c.focus();
+  }
+  function slideOut(box, done) { /* fade out, close the gap smoothly, then remove */
+    var parent = box.parentNode;
+    if (!parent || calm() || !box.animate) { box.remove(); done(); return; }
+    var sibs = Array.prototype.slice.call(parent.children).filter(function (n) { return n !== box; });
+    var before = sibs.map(function (n) { return n.getBoundingClientRect(); });
+    var flow = window.getComputedStyle(parent).display.indexOf('grid') < 0 && window.getComputedStyle(box).display !== 'grid'; /* list rows collapse; grid cards fade and the rest slide */
+    box.style.pointerEvents = 'none'; box.style.overflow = 'hidden';
+    var h = box.getBoundingClientRect().height;
+    var frames = flow
+      ? [{ opacity: 1, height: h + 'px' }, { opacity: 0, height: '0px', marginTop: '0px', marginBottom: '0px', paddingTop: '0px', paddingBottom: '0px', borderWidth: '0px' }]
+      : [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.96)' }];
+    var dur = flow ? 260 : 200, ended = false, a = box.animate(frames, { duration: dur, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' });
+    function finish() { /* also runs from the timer below, because a hidden tab does not play animations */
+      if (ended) return; ended = true;
+      box.remove();
+      if (!flow) sibs.forEach(function (n, i) {
+        var r = n.getBoundingClientRect(), dx = before[i].left - r.left, dy = before[i].top - r.top;
+        if ((dx || dy) && n.animate) n.animate([{ transform: 'translate(' + dx + 'px, ' + dy + 'px)' }, { transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.16, 1, .3, 1)' });
+      });
+      done();
+    }
+    a.onfinish = finish; setTimeout(finish, dur + 120);
+  }
+  function doDelete(kind, id, title) {
+    closeModal();
+    var isBook = kind === 'book', arr = DB && (isBook ? DB.books : DB.lists), idx = -1, saved = null;
+    if (arr) for (var i = 0; i < arr.length; i++) if (String(arr[i].id) === String(id)) { idx = i; break; }
+    if (idx >= 0) { saved = arr.splice(idx, 1)[0]; store('dc', JSON.stringify(DB)); }
+    var sel = '[data-m="' + (isBook ? 'del-book' : 'del-list') + '"][data-id="' + String(id).replace(/"/g, '') + '"]';
+    var boxes = qa(sel).map(itemBox).filter(Boolean), left = boxes.length;
+    function settled() { if (--left <= 0) changed('prune'); } /* counts and "nothing here yet" are brought up to date once the item has gone */
+    if (boxes.length) boxes.forEach(function (b) { slideOut(b, settled); }); else changed('prune');
+    call(isBook ? 'delBook' : 'delList', { id: id }).then(null, function (er) {
+      if (saved && arr && arr.indexOf(saved) < 0) { arr.splice(Math.min(idx, arr.length), 0, saved); store('dc', JSON.stringify(DB)); } /* the server said no: bring it back */
+      changed('data');
+      toast(ui('m.del.failed', { t: title || '' }) + ' ' + (er && er.message ? er.message : ''), 'err');
+    });
+  }
+
   /* ---------- gating and header ---------- */
   function needsLogin(route) { return enabled && !S.tok && PROTECT.indexOf(route) >= 0; }
   function lockHtml(route) {
@@ -362,7 +499,8 @@
       return '<button type="button" class="iconbtn acct" data-m="signin" title="' + esc(ui('m.signin')) + '" aria-label="' + esc(ui('m.signin')) + '">' + ICON_USER + '</button>';
     }
     var ini = String(S.name || '?').trim().charAt(0).toUpperCase();
-    return '<button type="button" class="iconbtn acct acct--on" data-m="account" title="' + esc(S.name) + '" aria-label="' + esc(ui('m.account') + ': ' + S.name) + '"><b>' + esc(ini) + '</b>' + (waitingCount() ? '<i class="acct__dot" aria-hidden="true"></i>' : '') + '</button>';
+    var dk = dotKind(), tip = dk ? S.name + ' \u2014 ' + dotTitle(dk) : S.name;
+    return '<button type="button" class="iconbtn acct acct--on" data-m="account" title="' + esc(tip) + '" aria-label="' + esc(ui('m.account') + ': ' + tip) + '"><b>' + esc(ini) + '</b>' + (dk ? '<i class="acct__dot acct__dot--' + dk + '" aria-hidden="true"></i>' : '') + '</button>';
   }
 
   /* ---------- library ---------- */
@@ -396,8 +534,8 @@
     var cover = stub ? libCover(b) : '<a class="cover-link" target="_blank" rel="noopener noreferrer" href="' + driveView(b.fileId) + '" tabindex="-1">' + libCover(b) + '</a>';
     var actions = stub ? '' : '<a class="btn btn--sm" target="_blank" rel="noopener noreferrer" href="' + driveView(b.fileId) + '">' + esc(ui('m.lib.open')) + '</a>' +
       '<a class="btn btn--sm" href="' + driveDl(b.fileId) + '">' + esc(ui('m.lib.download')) + '</a>';
-    if (b.mine && isTeam()) actions += '<button type="button" class="btn btn--sm btn--danger" data-m="del-book" data-id="' + esc(b.id) + '" data-sure="' + esc(ui('m.sure')) + '">' + esc(ui('m.delete')) + '</button>';
-    return '<article class="libcard">' + cover + '<div class="libcard__body"><h4>' + esc(b.ti) + '</h4>' +
+    if (b.mine && isTeam()) actions += '<button type="button" class="btn btn--sm btn--danger" data-m="del-book" data-id="' + esc(b.id) + '">' + esc(ui('m.delete')) + '</button>';
+    return '<article class="libcard" data-fid="' + esc(b.id) + '">' + cover + '<div class="libcard__body"><h4>' + esc(b.ti) + '</h4>' +
       (b.author ? '<p class="by">' + esc(b.author) + '</p>' : '') +
       (b.by ? '<p class="muted small">' + esc(ui('m.lib.addedBy', { name: b.by })) + '</p>' : '') +
       '<div class="libcard__act">' + actions + '</div></div></article>';
@@ -468,7 +606,9 @@
         '<label class="fld"><span>' + esc(ui('m.lib.fTitle')) + '</span><input id="upTitle" autocomplete="off"></label>' +
         '<label class="fld"><span>' + esc(ui('m.lib.fAuthor')) + '</span><input id="upAuthor" autocomplete="off"></label>' +
         '<label class="fld"><span>' + esc(ui('m.lib.fCat')) + '</span><select id="upCat">' + SUBJ.map(function (k) { return '<option value="' + CODE[k] + '"' + (k === curSub ? ' selected' : '') + '>' + esc(subjName(k)) + '</option>'; }).join('') + '</select></label>' +
-        '<label class="fld"><span>' + esc(ui('m.lib.fFiles')) + '</span><input id="upFiles" type="file" multiple></label>' +
+        '<label class="fld"><span>' + esc(ui('m.lib.fFiles')) + '</span><input id="upFiles" type="file" multiple accept=".pdf,application/pdf"></label>' +
+        '<p class="hint">' + esc(ui('m.up.rule', { n: Math.round(MAX_PDF / 1048576) })) + '</p>' +
+        '<p class="small up__pick" id="upPick" aria-live="polite"></p>' +
         '<p class="mform__err" id="mErr" role="alert" hidden></p>' +
         '<div id="upList" class="uplist" aria-live="polite"></div>' +
         '<button type="submit" class="btn">' + esc(ui('m.lib.go')) + '</button></form>');
@@ -484,110 +624,217 @@
       d = document.createElement('div'); d.id = 'upDock'; d.className = 'updock'; d.setAttribute('role', 'status'); d.setAttribute('aria-live', 'polite');
       document.body.appendChild(d);
     }
-    var total = UPQ.length, ok = UPQ.filter(function (u) { return u.st === 'ok'; }).length, bad = UPQ.filter(function (u) { return u.st === 'err'; }).length;
+    var real = UPQ.filter(function (u) { return !u.skip; }); /* files refused on the page (wrong type) are listed but are not part of the progress */
+    var total = real.length, ok = real.filter(function (u) { return u.st === 'ok'; }).length, bad = UPQ.filter(function (u) { return u.st === 'err'; }).length;
+    var badReal = real.filter(function (u) { return u.st === 'err'; }).length;
     var running = UPQ.some(function (u) { return u.st === 'run' || u.st === 'wait'; });
     var size = 0, done = 0;
-    UPQ.forEach(function (u) { size += u.size || 1; done += u.st === 'ok' ? (u.size || 1) : Math.min(u.done || 0, u.size || 1); });
+    real.forEach(function (u) { size += u.size || 1; done += u.st === 'ok' ? (u.size || 1) : Math.min(u.done || 0, u.size || 1); });
     var pct = size ? Math.round(done / size * 100) : 100;
-    var head = running ? ui('m.up.run', { n: Math.min(total, ok + bad + 1), t: total }) + ' &middot; ' + pct + '%' : bad ? '&#9888; ' + esc(ui('m.up.err')) : '&#10003; ' + esc(ui('m.up.done'));
+    var head = running ? ui('m.up.run', { n: Math.min(total, ok + badReal + 1), t: total }) + ' &middot; ' + pct + '%' : bad ? '&#9888; ' + esc(ui('m.up.err')) : '&#10003; ' + esc(ui('m.up.done'));
     d.className = 'updock' + (bad && !running ? ' updock--bad' : '') + (!running && !bad ? ' updock--ok' : '');
     d.innerHTML = '<div class="updock__row"><b>' + head + '</b>' +
       '<button type="button" class="linkbtn" data-m="upopen">' + esc(ui('m.up.details')) + '</button>' +
+      (running ? '<button type="button" class="linkbtn" data-m="upcancel-all">' + esc(ui('m.up.cancelAll')) + '</button>' : '') +
       (running ? '' : '<button type="button" class="updock__x" data-m="updock-x" aria-label="' + esc(ui('m.close')) + '">&times;</button>') + '</div>' +
       '<div class="up__bar"><i style="width:' + (running ? pct : 100) + '%"' + (bad && !running ? ' class="bad"' : '') + '></i></div>';
     clearTimeout(dockTimer);
     if (!running && !bad) dockTimer = setTimeout(function () { var x = document.getElementById('upDock'); if (x && !UPQ.some(function (u) { return u.st === 'run' || u.st === 'wait'; })) { UPQ = []; x.remove(); } }, 7000);
   }
+  function eta(u) {
+    if (!u.sp || u.st !== 'run' || u.waiting || u.retrying) return '';
+    var left = Math.max(0, (u.size - u.done) / u.sp), un = String(ui('m.up.units')).split('|'), t;
+    if (left < 90) t = Math.max(1, Math.round(left)) + ' ' + un[0]; else if (left < 5400) t = Math.round(left / 60) + ' ' + un[1]; else t = (left / 3600).toFixed(1) + ' ' + un[2];
+    return ' &middot; ' + (u.sp / 1048576).toFixed(1) + ' ' + esc(ui('m.up.mbs')) + ' &middot; ' + esc(ui('m.up.left', { t: t }));
+  }
   function paintUploads() {
     paintDock();
     var el = $('#upList'); if (!el) return;
-    el.innerHTML = UPQ.map(function (u) {
-      var pct = u.size ? Math.round(u.done / u.size * 100) : 100;
-      var tx = u.st === 'err' ? '&#9888; ' + esc(u.msg) : u.st === 'ok' ? '&#10003; ' + mb(u.size) + ' MB' : u.st === 'wait' ? mb(u.size) + ' MB' : mb(u.done) + ' / ' + mb(u.size) + ' MB &middot; ' + pct + '%';
-      return '<div class="up"><span>' + esc(u.name) + '</span><b>' + tx + '</b><div class="up__bar"><i style="width:' + (u.st === 'ok' ? 100 : pct) + '%"' + (u.st === 'err' ? ' class="bad"' : '') + '></i></div></div>';
+    el.innerHTML = UPQ.map(function (u, i) {
+      var pct = u.size ? Math.round(u.done / u.size * 100) : 100, live = u.st === 'run' || u.st === 'wait';
+      var tx = u.st === 'err' ? '&#9888; ' + esc(u.msg) : u.st === 'ok' ? '&#10003; ' + mb(u.size) + ' MB' : u.st === 'wait' ? mb(u.size) + ' MB &middot; ' + esc(ui('m.up.queued')) :
+        u.waiting ? esc(ui('m.up.offline')) : u.retrying ? esc(ui('m.up.retrying', { n: u.retrying })) : mb(u.done) + ' / ' + mb(u.size) + ' MB &middot; ' + pct + '%' + eta(u);
+      var act = live ? '<button type="button" class="up__x" data-m="upcancel" data-i="' + i + '" aria-label="' + esc(ui('m.up.cancel') + ': ' + u.name) + '" title="' + esc(ui('m.up.cancel')) + '">&times;</button>' :
+        u.st === 'err' && !u.skip ? '<button type="button" class="linkbtn up__retry" data-m="upretry" data-i="' + i + '">' + esc(ui('m.up.retry')) + '</button>' : '';
+      return '<div class="up' + (u.st === 'err' ? ' up--bad' : '') + '"><span>' + esc(u.name) + '</span><b>' + tx + '</b>' + act + '<div class="up__bar"><i style="width:' + (u.st === 'ok' ? 100 : pct) + '%"' + (u.st === 'err' ? ' class="bad"' : '') + '></i></div></div>';
     }).join('');
   }
   function toB64(blob) {
     return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(String(r.result).split(',')[1] || ''); }; r.onerror = rej; r.readAsDataURL(blob); });
   }
   function retry(fn, n) {
-    return fn().then(null, function (e) { if (n > 0 && S.tok) return retry(fn, n - 1); throw e; });
+    return fn().then(null, function (e) { if (n > 0 && S.tok && e && e.net) return retry(fn, n - 1); throw e; }); /* only connection problems are worth retrying */
   }
-  /* Browser -> Drive directly (real, smooth progress). The Apps Script only opens the session and records the book afterwards.
-     If the direct way is blocked, it falls back to the old way (chunks through Apps Script). */
+  /* ---- PDF rules (the backend checks the same things again) ---- */
+  function pdfReason(f) { /* quick check by name, type and size; '' when it looks fine */
+    if (!/\.pdf$/i.test(String(f.name || '')) || (f.type && f.type !== 'application/pdf' && f.type !== 'application/x-pdf')) return ui('m.up.notPdf');
+    if (!f.size) return ui('m.up.empty');
+    if (f.size > MAX_PDF) return ui('m.up.big', { n: Math.round(MAX_PDF / 1048576) });
+    return '';
+  }
+  function readHead(f) { /* the first KB of the file as text, to confirm it starts like a PDF */
+    return new Promise(function (res) {
+      try { var r = new FileReader(); r.onload = function () { res(String(r.result || '')); }; r.onerror = function () { res(''); }; r.readAsBinaryString(f.slice(0, 1024)); } catch (e) { res(''); }
+    });
+  }
+  function checkFile(f) { /* resolves with a reason when the file must not be uploaded, '' when it is a real PDF */
+    var why = pdfReason(f);
+    if (why) return Promise.resolve(why);
+    return readHead(f).then(function (h) { return h.indexOf('%PDF-') >= 0 ? '' : ui('m.up.fake'); });
+  }
+  var pickRun = 0;
+  function paintPick() { /* what the person has chosen, checked at once (name, type, size and then the inside), before pressing the button */
+    var el = $('#upPick'), inp = $('#upFiles'); if (!el || !inp) return;
+    var fs = Array.prototype.slice.call(inp.files || []), run = ++pickRun;
+    if (!fs.length) { el.innerHTML = ''; el.className = 'small up__pick'; return; }
+    function paint(why) {
+      var bad = fs.filter(function (f, i) { return why[i]; }), ok = fs.filter(function (f, i) { return !why[i]; }), sz = 0;
+      ok.forEach(function (f) { sz += f.size; });
+      el.className = 'small up__pick';
+      el.innerHTML = (ok.length ? '<div>&#10003; ' + esc(ui('m.up.picked', { n: ok.length, s: mb(sz) })) + '</div>' : '') +
+        fs.map(function (f, i) { return why[i] ? '<div class="up__bad">&#9888; ' + esc(f.name) + ': ' + esc(why[i]) + '</div>' : ''; }).join('');
+    }
+    paint(fs.map(pdfReason));
+    Promise.all(fs.map(checkFile)).then(function (why) { if (run === pickRun && $('#upPick') === el) paint(why); });
+  }
+
+  /* ---- Browser -> Drive directly (real progress). The Apps Script only opens the session and records the book afterwards.
+     It survives bad connections: every 8 MB piece is retried with growing pauses, after a break Drive is asked how much it already has,
+     and when the connection is gone the upload waits for it to come back. If Drive cannot be reached at all from this browser, it falls
+     back to the old way (pieces through Apps Script). ---- */
   var DIRECT_CH = 8388608; /* 8 MB = 32 x 256 KB (Drive wants multiples of 256 KB) */
-  var directBroken = false, paintAt = 0, paintTimer = 0;
+  var directBroken = 0, paintAt = 0, paintTimer = 0;
+  function directOff() { return directBroken && Date.now() - directBroken < 300000; } /* after a failure the other way is used for 5 minutes, then Drive is tried again */
   function paintSoon() { /* progress events fire many times a second: repaint at most ~5 times a second */
     var now = Date.now();
     if (now - paintAt >= 200) { paintAt = now; paintUploads(); return; }
     if (!paintTimer) paintTimer = setTimeout(function () { paintTimer = 0; paintAt = Date.now(); paintUploads(); }, 200);
   }
-  function directFail(why) { var e = new Error(why); e.direct = true; return e; }
-  function putDirect(session, blob, start, end, total, onLoaded) {
-    return new Promise(function (resolve, reject) {
-      var x = new XMLHttpRequest();
-      x.open('PUT', session);
-      x.setRequestHeader('Content-Range', 'bytes ' + start + '-' + (end - 1) + '/' + total);
-      x.upload.onprogress = function (e) { if (e.lengthComputable) onLoaded(e.loaded); };
-      x.onload = function () { resolve({ status: x.status, text: x.responseText }); };
-      x.onerror = function () { reject(directFail('direct request blocked, status ' + x.status)); };
-      x.ontimeout = function () { reject(directFail('direct request timed out')); };
-      x.send(blob);
+  function directFail(why, blocked) { var e = new Error(why); e.direct = true; e.blocked = !!blocked; return e; }
+  function cancelled() { var e = new Error(ui('m.up.cancelled')); e.cancelled = true; return e; }
+  function nap(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function whenOnline(u) { /* wait (up to 10 minutes) until the connection is back */
+    return new Promise(function (res) {
+      if (navigator.onLine !== false) { res(); return; }
+      u.waiting = true; paintSoon();
+      var t0 = Date.now(), iv = setInterval(function () {
+        if (navigator.onLine !== false || u.cancel || Date.now() - t0 > 600000) { clearInterval(iv); u.waiting = false; res(); }
+      }, 1000);
     });
   }
-  function uploadDirect(u, session) {
-    var total = u.f.size, pos = 0;
-    function next() {
+  function speed(u) { /* smoothed upload speed, for "MB/s" and "time left" */
+    var now = Date.now();
+    if (!u.lt) { u.lt = now; u.ld = u.done; return; }
+    var dt = (now - u.lt) / 1000;
+    if (dt >= 0.6 && u.done >= u.ld) { var v = (u.done - u.ld) / dt; u.sp = u.sp ? u.sp * 0.7 + v * 0.3 : v; u.lt = now; u.ld = u.done; }
+  }
+  function xhrPut(u, session, body, range, onLoaded) {
+    return new Promise(function (resolve, reject) {
+      var x = new XMLHttpRequest(); u.xhr = x;
+      x.open('PUT', session);
+      x.setRequestHeader('Content-Range', range);
+      x.timeout = 600000; /* ten minutes for one piece: slow connections are fine */
+      if (onLoaded) x.upload.onprogress = function (e) { if (e.lengthComputable) onLoaded(e.loaded); };
+      x.onload = function () { u.xhr = null; var rg = null; try { rg = x.getResponseHeader('Range'); } catch (e) { rg = null; } resolve({ status: x.status, text: x.responseText, range: rg }); };
+      x.onerror = function () { u.xhr = null; reject(directFail('network error', true)); };
+      x.ontimeout = function () { u.xhr = null; reject(directFail('timed out')); };
+      x.onabort = function () { u.xhr = null; reject(cancelled()); };
+      x.send(body);
+    });
+  }
+  function fileIdOf(text) {
+    var meta; try { meta = JSON.parse(text); } catch (e) { throw directFail('bad response'); }
+    if (!meta || !meta.id) throw directFail('no file id');
+    return meta.id;
+  }
+  function sessionStatus(u, session, total) { /* ask Drive how much of the file it already holds */
+    return xhrPut(u, session, null, 'bytes */' + total).then(function (r) {
+      if (r.status === 200 || r.status === 201) return { done: true, id: fileIdOf(r.text) };
+      if (r.status === 308) { var m = /bytes=0-(\d+)/.exec(r.range || ''); return m ? { pos: +m[1] + 1 } : {}; } /* the header is not readable: keep the last confirmed point */
+      if (r.status === 404 || r.status === 410) { var e = directFail('Drive session expired'); e.restart = true; throw e; }
+      throw directFail('status ' + r.status);
+    });
+  }
+  function sendChunk(u, session, pos0, total) { /* one piece, with retries; resolves { id } when Drive has the whole file, else { pos } */
+    var pos = pos0, fails = 0;
+    function go() {
+      if (u.cancel) return Promise.reject(cancelled());
       var end = Math.min(pos + DIRECT_CH, total), base = pos;
-      return putDirect(session, u.f.slice(pos, end), pos, end, total, function (loaded) {
-        u.done = Math.min(total, base + loaded); paintSoon();
+      return whenOnline(u).then(function () {
+        u.retrying = 0;
+        return xhrPut(u, session, u.f.slice(pos, end), 'bytes ' + pos + '-' + (end - 1) + '/' + total, function (loaded) { u.done = Math.min(total, base + loaded); speed(u); paintSoon(); });
       }).then(function (res) {
-        pos = end; u.done = pos;
-        if (res.status === 200 || res.status === 201) {
-          var meta; try { meta = JSON.parse(res.text); } catch (e) { throw directFail('bad response'); }
-          if (!meta || !meta.id) throw directFail('no file id');
-          return meta.id;
-        }
-        if (res.status !== 308) throw directFail('Drive answered ' + res.status);
-        if (pos >= total) throw directFail('upload not confirmed');
-        return next();
+        if (res.status === 200 || res.status === 201) return { id: fileIdOf(res.text) };
+        if (res.status === 308) { var m = /bytes=0-(\d+)/.exec(res.range || ''); return { pos: m ? +m[1] + 1 : end }; }
+        if (res.status === 404 || res.status === 410) { var e = directFail('Drive session expired'); e.restart = true; throw e; }
+        throw directFail('Drive answered ' + res.status);
+      }).then(null, function (e) {
+        if (u.cancel) throw cancelled();
+        if (!e || e.cancelled || e.restart || !e.direct) throw e;
+        fails++;
+        if (fails > 6 || (pos0 === 0 && e.blocked && fails >= 2)) throw e; /* a blocked first piece means the browser cannot reach Drive at all */
+        u.retrying = fails; paintSoon();
+        return nap(Math.min(30000, 1000 * Math.pow(2, fails - 1))).then(function () { return whenOnline(u); }).then(function () {
+          return sessionStatus(u, session, total).then(function (st) {
+            if (st.done) return { id: st.id };
+            if (typeof st.pos === 'number') pos = st.pos;
+            return go();
+          }, function (e2) { if (e2 && (e2.cancelled || e2.restart)) throw e2; return go(); });
+        });
       });
     }
-    return next();
+    return go();
+  }
+  function uploadDirect(u, session) {
+    var total = u.f.size;
+    function loop(pos) {
+      if (u.cancel) return Promise.reject(cancelled());
+      return sendChunk(u, session, pos, total).then(function (r) {
+        if (r.id) return r.id;
+        u.done = r.pos; speed(u); paintSoon();
+        if (r.pos >= total) throw directFail('upload not confirmed');
+        return loop(r.pos);
+      });
+    }
+    return loop(0);
   }
   function uploadFile(u) {
     var title = u.cat + '::' + ((u.one && u.title) || u.name.replace(/\.[^.]+$/, ''));
-    /* fallback: chunks through Apps Script */
+    u.t0 = u.t0 || Date.now();
+    /* fallback: pieces through Apps Script */
     function viaScript(r) {
-      var pos = 0; u.done = 0;
+      var pos = 0; u.done = 0; u.retrying = 0;
       function part() {
+        if (u.cancel) throw cancelled();
         var end = Math.min(pos + CH, u.f.size);
         return toB64(u.f.slice(pos, end)).then(function (data) {
-          return retry(function () { return call('upPart', { url: r.url, start: pos, size: u.f.size, b64: data, title: title, author: u.author }, 300000); }, 2);
-        }).then(function () { pos = end; u.done = pos; paintUploads(); if (pos < u.f.size) return part(); });
+          return retry(function () { return call('upPart', { url: r.url, start: pos, size: u.f.size, b64: data, title: title, author: u.author }, 300000); }, 3);
+        }).then(function (resp) { pos = end; u.done = pos; speed(u); paintSoon(); if (pos < u.f.size) return part(); return resp; });
       }
       return part();
     }
-    var q = { fileName: u.name, mime: u.f.type, size: u.f.size };
-    if (!M.demo && !directBroken) q.origin = location.origin;
-    return call('upStart', q).then(function (r) {
+    var q = { fileName: u.name, mime: 'application/pdf', size: u.f.size };
+    if (!M.demo && !directOff()) q.origin = location.origin;
+    return retry(function () { return call('upStart', q); }, 2).then(function (r) {
       if (M.demo) return call('upPart', { url: r.url, start: 0, size: u.f.size, b64: '', title: title, author: u.author });
-      if (r.direct && !directBroken) {
+      if (r.direct && !directOff()) {
         return uploadDirect(u, r.url).then(function (id) {
-          u.done = u.size; paintUploads();
-          return retry(function () { return call('upDone', { fileId: id, fileName: u.name, title: title, author: u.author }, 120000); }, 2);
+          u.fileId = id; u.done = u.size; u.retrying = 0; paintUploads();
+          return retry(function () { return call('upDone', { fileId: id, fileName: u.name, title: title, author: u.author }, 120000); }, 3);
         }, function (e) {
+          if (e && e.restart && !u.restarted) { u.restarted = true; u.done = 0; return uploadFile(u); } /* Drive dropped the session: begin again with a new one */
           if (!e || !e.direct) throw e;
-          directBroken = true; u.done = 0; paintUploads();
+          if (e.blocked) directBroken = Date.now(); /* the browser cannot reach Drive: the other way from now on */
+          u.done = 0; u.retrying = 0; paintUploads();
           if (window.console) console.warn('Direct upload failed, using the fallback:', e.message);
-          return call('upStart', { fileName: u.name, mime: u.f.type, size: u.f.size }).then(viaScript);
+          return call('upStart', { fileName: u.name, mime: 'application/pdf', size: u.f.size }).then(viaScript);
         });
       }
-      if (!r.direct) directBroken = true;
+      if (!r.direct) directBroken = Date.now();
       return viaScript(r);
     });
   }
-  var upRunning = false, upBatchErr = false;
+  var upBatchErr = false;
   /* Close the upload dialog (whatever dialog is open is the upload one while a batch runs). */
   function closeUploadDialog() {
     try {
@@ -598,55 +845,168 @@
       modalEl = null; document.body.classList.remove('modal-open');
     }
   }
-  function runUploads() {
-    if (upRunning) return; upRunning = true; uploading = true; upBatchErr = false;
-    (function next() {
-      var u = UPQ.filter(function (x) { return x.st === 'wait'; })[0];
-      if (!u) {
-        upRunning = false; uploading = false; fetchedOnce = false;
-        var done = UPQ.filter(function (x) { return x.st === 'ok'; })[0];
-        /* everything uploaded: close the dialog by itself first (it stays open when a file failed, so the error can be read) */
-        if (!upBatchErr && !UPQ.some(function (x) { return x.st === 'err'; })) closeUploadDialog();
-        try { paintDock(); } catch (e) { if (window.console) console.error(e); }
-        try { if (done) { curSub = KEY[codeOf(done.cat)]; out.onSubject(curSub); } } catch (e) { /* ignore */ }
-        try { refresh(); } catch (e) { if (window.console) console.error(e); }
-        return;
+  function endBatch() {
+    if (!uploading) return;
+    uploading = false;
+    var fresh = UPQ.filter(function (x) { return x.st === 'ok' && !x.shown; });
+    /* everything uploaded: close the dialog by itself first (it stays open when a file failed, so the error can be read) */
+    var closing = !upBatchErr && !UPQ.some(function (x) { return x.st === 'err'; });
+    if (closing) closeUploadDialog();
+    try { paintDock(); } catch (e) { if (window.console) console.error(e); }
+    try { if (fresh[0]) { curSub = KEY[codeOf(fresh[0].cat)]; out.onSubject(curSub); } } catch (e) { /* ignore */ }
+    if (!fresh.length || !DB || !S.tok) { fetchedOnce = false; try { refresh(); } catch (e) { if (window.console) console.error(e); } return; }
+    /* the new files go into the list we already have, and slide into the page once the dialog is gone; the server is asked quietly afterwards */
+    var recs = fresh.map(function (x) { x.shown = true; return bookRec(x); });
+    setTimeout(function () { showNew('book', recs); }, closing && !calm() ? 300 : 0);
+  }
+  function bookRec(u) { /* the record the server stored (it sends it back); if an older backend does not, a temporary one that the quiet check replaces */
+    var r = u.resp && u.resp.rec, title = u.cat + '::' + ((u.one && u.title) || u.name.replace(/\.[^.]+$/, ''));
+    return r && r.id ? { id: r.id, title: r.title, author: r.author || '', fileId: r.fileId, by: r.by || S.name, mine: true, temp: false } :
+      { id: 'tmp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: title, author: u.author || '', fileId: u.fileId || '', by: S.name, mine: true, temp: true };
+  }
+  function listRec(resp, title, pl) {
+    var r = resp && resp.rec;
+    return r && r.id ? { id: r.id, title: r.title, pl: r.pl, by: r.by || S.name, mine: true, temp: false } :
+      { id: 'tmp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: title, pl: pl, by: S.name, mine: true, temp: true };
+  }
+  /* ---------- a new item appears: it is added to the data we hold, the page repaints at once, and the new item grows / fades in
+     while the others slide aside. Then the server is asked quietly; the page is redrawn only if the server's list really differs. ---------- */
+  function showNew(kind, recs) {
+    if (!DB) { fetchedOnce = false; refresh(); return; }
+    var arr = kind === 'book' ? (DB.books = DB.books || []) : (DB.lists = DB.lists || []), ids = [], temp = false;
+    recs.forEach(function (r) {
+      for (var i = 0; i < arr.length; i++) if (String(arr[i].id) === String(r.id)) return;
+      if (r.temp) temp = true;
+      arr.push({ id: r.id, title: r.title, author: r.author, fileId: r.fileId, pl: r.pl, by: r.by, mine: true }); ids.push(r.id);
+    });
+    store('dc', JSON.stringify(DB));
+    changed('add', ids);
+    quietRefresh(temp ? 600 : 2500);
+  }
+  function sameIds(a, b) {
+    a = (a || []).map(function (x) { return String(x.id); }).sort().join(','); b = (b || []).map(function (x) { return String(x.id); }).sort().join(',');
+    return a === b;
+  }
+  function quietRefresh(delay) {
+    setTimeout(function () {
+      if (!S.tok || dbState === 'loading') return;
+      call('data').then(function (r) {
+        if (!r || !S.tok) return;
+        if (r.role && r.role !== S.role) { fetchedOnce = false; refresh(); return; }
+        var same = DB && sameIds(DB.books, r.books) && sameIds(DB.lists, r.lists);
+        DB = r; store('dc', JSON.stringify(r));
+        if (!same) { try { out.onData(r); } catch (e) { /* ignore */ } changed('data'); } /* somebody else added or removed something: show it */
+      }, function () { /* the next normal load will catch up */ });
+    }, delay);
+  }
+  function snapshot() { var m = {}; qa('[data-fid]').forEach(function (n) { m[n.getAttribute('data-fid')] = n.getBoundingClientRect(); }); return m; }
+  function reveal(snap, ids) { /* new items fade / grow in, the others slide to their new places */
+    ids = ids || []; snap = snap || {};
+    var first = null, k = 0, quiet = calm();
+    qa('[data-fid]').forEach(function (n) {
+      var id = n.getAttribute('data-fid'), isNew = ids.indexOf(id) >= 0, grid = n.parentNode && window.getComputedStyle(n.parentNode).display.indexOf('grid') >= 0;
+      if (isNew) {
+        if (!first) first = n;
+        n.classList.add('is-new'); setTimeout(function () { n.classList.remove('is-new'); }, 2600);
+        if (quiet || !n.animate) return;
+        var delay = (k++) * 90;
+        if (grid) { n.animate([{ opacity: 0, transform: 'translateY(10px) scale(.95)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: delay, easing: 'cubic-bezier(.16, 1, .3, 1)', fill: 'backwards' }); return; }
+        var h = n.getBoundingClientRect().height, gone = false;
+        n.style.overflow = 'hidden';
+        var a = n.animate([{ opacity: 0, height: '0px', marginTop: '0px', marginBottom: '0px', paddingTop: '0px', paddingBottom: '0px' }, { opacity: 1, height: h + 'px' }], { duration: 340, delay: delay, easing: 'cubic-bezier(.16, 1, .3, 1)', fill: 'backwards' });
+        var fin = function () { if (!gone) { gone = true; n.style.overflow = ''; } };
+        a.onfinish = fin; setTimeout(fin, 340 + delay + 150);
+      } else if (grid && snap[id] && !quiet && n.animate) {
+        var r = n.getBoundingClientRect(), dx = snap[id].left - r.left, dy = snap[id].top - r.top;
+        if (dx || dy) n.animate([{ transform: 'translate(' + dx + 'px, ' + dy + 'px)' }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.16, 1, .3, 1)' });
       }
-      u.st = 'run'; try { paintUploads(); } catch (e) { /* ignore */ }
-      uploadFile(u).then(function () {
-        u.st = 'ok'; u.done = u.size;
-      }, function (e) {
-        u.st = 'err'; u.msg = (e && e.message) || String(e); upBatchErr = true;
-      }).then(function () {
-        try { paintUploads(); } catch (e) { /* ignore */ }
-        next();
-      });
-    })();
+    });
+    if (first && first.getBoundingClientRect) { /* bring it into view if it landed off screen */
+      var b = first.getBoundingClientRect();
+      if (b.top < 72 || b.bottom > (window.innerHeight || 700) - 24) { try { first.scrollIntoView({ behavior: quiet ? 'auto' : 'smooth', block: 'center' }); } catch (e) { /* ignore */ } }
+    }
+  }
+  function startOne(u) {
+    u.st = 'run'; u.cancel = false; u.msg = '';
+    try { paintUploads(); } catch (e) { /* ignore */ }
+    uploadFile(u).then(function (resp) {
+      u.resp = resp; u.st = 'ok'; u.done = u.size; u.retrying = 0;
+    }, function (e) {
+      if (e && e.cancelled) { UPQ = UPQ.filter(function (x) { return x !== u; }); return; }
+      u.st = 'err'; u.msg = (e && e.message) || String(e); u.retrying = 0; upBatchErr = true;
+    }).then(function () {
+      try { paintUploads(); } catch (e) { /* ignore */ }
+      pump();
+    });
+  }
+  function pump() { /* keep up to UP_PAR files going; when nothing runs and nothing waits, the batch is over */
+    var active = UPQ.filter(function (x) { return x.st === 'run'; }).length;
+    while (active < UP_PAR) {
+      var u = UPQ.filter(function (x) { return x.st === 'wait'; })[0];
+      if (!u) break;
+      startOne(u); active++;
+    }
+    if (!active) endBatch();
+  }
+  function runUploads() {
+    if (!uploading) { uploading = true; upBatchErr = false; }
+    pump();
+  }
+  function cancelUpload(u) {
+    if (!u) return;
+    if (u.st === 'wait') { UPQ = UPQ.filter(function (x) { return x !== u; }); paintUploads(); if (!UPQ.some(function (x) { return x.st === 'run' || x.st === 'wait'; })) endBatch(); return; }
+    if (u.st === 'run') { u.cancel = true; if (u.xhr) { try { u.xhr.abort(); } catch (e) { /* ignore */ } } }
   }
   function onUploadSubmit() {
     var files = Array.prototype.slice.call($('#upFiles').files || []);
     if (!files.length) { showErr(ui('m.lib.pick')); return; }
-    showErr('');
-    var meta = { title: ($('#upTitle').value || '').trim(), author: ($('#upAuthor').value || '').trim(), cat: $('#upCat').value, one: files.length === 1 };
-    UPQ = UPQ.filter(function (u) { return u.st === 'run' || u.st === 'wait'; }).concat(files.map(function (f) { return { f: f, name: f.name, size: f.size, done: 0, st: 'wait', title: meta.title, author: meta.author, cat: meta.cat, one: meta.one }; }));
-    $('#upFiles').value = ''; paintUploads(); runUploads();
+    showErr(''); busy(true);
+    var meta = { title: ($('#upTitle').value || '').trim(), author: ($('#upAuthor').value || '').trim(), cat: $('#upCat').value };
+    Promise.all(files.map(checkFile)).then(function (why) {
+      var good = files.filter(function (f, i) { return !why[i]; });
+      meta.one = good.length === 1;
+      var items = files.map(function (f, i) {
+        return why[i] ? { f: f, name: f.name, size: f.size, done: 0, st: 'err', skip: true, msg: why[i] } :
+          { f: f, name: f.name, size: f.size, done: 0, st: 'wait', title: meta.title, author: meta.author, cat: meta.cat, one: meta.one };
+      });
+      UPQ = UPQ.filter(function (u) { return u.st === 'run' || u.st === 'wait'; }).concat(items);
+      busy(false); var inp = $('#upFiles'); if (inp) inp.value = ''; paintPick(); paintUploads();
+      if (good.length) runUploads();
+    });
   }
   window.addEventListener('beforeunload', function (e) { if (uploading) { e.preventDefault(); e.returnValue = ''; } });
 
   /* ---------- shared playlists (lectures page) ---------- */
+  /* Only YouTube videos and playlists are accepted here: a link on youtube.com / youtu.be, or a bare video id (11 characters) or playlist id.
+     A bare video id is then checked with YouTube itself (ytInfo), so a random word cannot be added as a "video". */
+  var RE_PLID = /^(PL|UU|FL|OL|LL|RD)[\w-]{10,64}$/;
   function parseYT(u) {
-    var l = u.match(/[?&]list=([\w-]+)/), v = u.match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/);
-    return l ? l[1] : v ? 'v:' + v[1] : /^[\w-]{11}$/.test(u) ? 'v:' + u : /^[\w-]{13,}$/.test(u) ? u : '';
+    u = String(u || '').trim(); if (!u) return '';
+    if (/^[\w-]{11}$/.test(u)) return 'v:' + u;
+    if (RE_PLID.test(u)) return u;
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    var host; try { host = new URL(u).hostname.toLowerCase().replace(/^(www|m|music)\./, ''); } catch (e) { return ''; }
+    if (host !== 'youtube.com' && host !== 'youtu.be' && host !== 'youtube-nocookie.com') return '';
+    var l = u.match(/[?&]list=((?:PL|UU|FL|OL|LL|RD)[\w-]{10,64})(?![\w-])/);
+    if (l) return l[1];
+    var v = u.match(/(?:[?&]v=|youtu\.be\/|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})(?![\w-])/);
+    return v ? 'v:' + v[1] : '';
   }
   function ytUrl(pl) { return String(pl).indexOf('v:') === 0 ? 'https://www.youtube.com/watch?v=' + pl.slice(2) : 'https://www.youtube.com/playlist?list=' + pl; }
-  function ytTitle(pl) {
-    if (M.demo) return Promise.resolve('');
+  /* Asks YouTube about the video / playlist. state: 'ok' (title and picture), 'gone' (not found or private), 'blocked' (cannot be played on other
+     sites) or 'unknown' (YouTube did not answer: the link is accepted anyway). */
+  function ytInfo(pl) {
+    if (M.demo) return Promise.resolve({ state: 'unknown', title: '' });
     return new Promise(function (resolve) {
-      var done = false, to = setTimeout(function () { if (!done) { done = true; resolve(''); } }, 6000);
+      var done = false, to = setTimeout(function () { fin({ state: 'unknown', title: '' }); }, 6000);
+      function fin(o) { if (!done) { done = true; clearTimeout(to); resolve(o); } }
       try {
-        fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(ytUrl(pl))).then(function (r) { return r.json(); })
-          .then(function (j) { if (!done) { done = true; clearTimeout(to); resolve(j.title || ''); } }, function () { if (!done) { done = true; clearTimeout(to); resolve(''); } });
-      } catch (e) { clearTimeout(to); resolve(''); }
+        fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(ytUrl(pl))).then(function (r) {
+          if (r.status === 404 || r.status === 400) { fin({ state: 'gone' }); return null; }
+          if (r.status === 401 || r.status === 403) { fin({ state: 'blocked' }); return null; }
+          return r.json();
+        }).then(function (j) { if (j) fin({ state: 'ok', title: j.title || '', thumb: j.thumbnail_url || '' }); }, function () { fin({ state: 'unknown', title: '' }); });
+      } catch (e) { fin({ state: 'unknown', title: '' }); }
     });
   }
   function allLists() { return (DB && DB.lists) || []; }
@@ -666,7 +1026,7 @@
    * rowsFn(items, currentVideoId) is supplied by app.js and draws the same rows as the course lectures above. */
   function isSingle(x) { return String(x.pl).indexOf('v:') === 0; }
   function delBtn(x) {
-    return x.mine && isTeam() ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(x.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + x.title) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '';
+    return x.mine && isTeam() ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(x.id) + '" aria-label="' + esc(ui('m.delete') + ': ' + x.title) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '';
   }
   function listRow(x, embed, curId) {
     var single = isSingle(x);
@@ -674,7 +1034,7 @@
     var main = embed
       ? '<button type="button" class="lec" data-mplay="' + esc(x.id) + '" data-key="' + esc(x.pl) + '" data-list="' + (single ? '0' : '1') + '"' + (curId === x.id ? ' aria-current="true"' : '') + '>' + inner + '<span class="lec__d"></span><span class="lec__bar" aria-hidden="true"></span></button>'
       : '<a class="lec" data-last="' + esc(x.pl) + '" href="' + esc(ytUrl(x.pl)) + '" target="_blank" rel="noopener noreferrer">' + inner + '<span class="lec__d"></span><span class="lec__go">' + ICON_EXT + '</span></a>';
-    return '<li>' + main + delBtn(x) + '</li>';
+    return '<li' + (single ? ' data-fid="' + esc(x.id) + '"' : '') + '>' + main + delBtn(x) + '</li>';
   }
   function packBlock(x, embed, curId, curVid, rowsFn) {
     var SY = window.SiteYT, r = SY && rowsFn ? SY.ensure(x.pl) : null;
@@ -684,7 +1044,7 @@
     if (items.length) body = '<ol class="lecs">' + rowsFn(items, curVid) + '</ol>';
     else if (r && r.state === 'loading') body = '<p class="muted" role="status">' + esc(ui('m.pl.loading')) + '</p>';
     else body = '<p class="muted">' + esc(ui('m.pl.noTopics')) + '</p><ol class="lecs mls">' + listRow(x, embed, curId) + '</ol>';
-    return '<section class="mpl" id="mpl-' + esc(x.id) + '"><div class="mpl__head"><h3>' + esc(x.title) + '</h3>' + delBtn(x) + '</div>' +
+    return '<section class="mpl" data-fid="' + esc(x.id) + '" id="mpl-' + esc(x.id) + '"><div class="mpl__head"><h3>' + esc(x.title) + '</h3>' + delBtn(x) + '</div>' +
       '<p class="meta">' + meta + '</p>' + body + '</section>';
   }
   function playlistsHtml(embed, curId, curVid, rowsFn) {
@@ -705,18 +1065,50 @@
       '<p class="hint rights">' + esc(ui('m.rights')) + '</p>' +
       '<form id="mListForm" class="mform" novalidate>' +
         '<label class="fld"><span>' + esc(ui('m.pl.url')) + '</span><input id="plUrl" autocomplete="off" inputmode="url" placeholder="https://youtu.be/…"></label>' +
+        '<div id="plPrev" class="plprev" aria-live="polite" hidden></div>' +
         '<label class="fld"><span>' + esc(ui('m.pl.name')) + '</span><input id="plName" autocomplete="off"></label>' +
         '<p class="mform__err" id="mErr" role="alert" hidden></p>' +
         '<button type="submit" class="btn">' + esc(ui('m.pl.save')) + '</button></form>');
   }
+  /* As soon as a link is pasted, show what it is (picture and title), or why it cannot be added. */
+  var prevTimer = 0, prevSeq = 0, prevState = null;
+  function previewList() {
+    var inp = $('#plUrl'), box = $('#plPrev'); if (!inp || !box) return;
+    var raw = (inp.value || '').trim(), seq = ++prevSeq; prevState = null;
+    function say(cls, html) { box.className = 'plprev ' + cls; box.innerHTML = html; box.hidden = false; }
+    if (!raw) { box.hidden = true; box.innerHTML = ''; return; }
+    var pl = parseYT(raw);
+    if (!pl) { say('plprev--bad', '&#9888; ' + esc(ui('m.pl.bad'))); return; }
+    if (listByPl(pl)) { say('plprev--bad', '&#9888; ' + esc(ui('m.pl.dup'))); return; }
+    say('', '<span class="spin" aria-hidden="true"></span> ' + esc(ui('m.pl.checking')));
+    ytInfo(pl).then(function (inf) {
+      if (seq !== prevSeq || !$('#plPrev')) return;
+      prevState = { pl: pl, info: inf };
+      if (inf.state === 'gone') { say('plprev--bad', '&#9888; ' + esc(ui('m.pl.gone'))); return; }
+      if (inf.state === 'blocked') { say('plprev--bad', '&#9888; ' + esc(ui('m.pl.blocked'))); return; }
+      var video = pl.indexOf('v:') === 0, thumb = inf.thumb || (video ? 'https://i.ytimg.com/vi/' + pl.slice(2) + '/mqdefault.jpg' : '');
+      say('plprev--ok', (thumb ? '<img src="' + esc(thumb) + '" alt="" loading="lazy">' : '') +
+        '<span><b>' + esc(inf.title || ui(video ? 'm.pl.kindVideo' : 'm.pl.kindList')) + '</b><small>&#10003; ' + esc(ui(video ? 'm.pl.kindVideo' : 'm.pl.kindList')) + ' &middot; YouTube</small></span>');
+      var nm = $('#plName'); if (nm && inf.title) nm.placeholder = inf.title;
+    });
+  }
   function onListSubmit() {
     var pl = parseYT(($('#plUrl').value || '').trim());
     if (!pl) { showErr(ui('m.pl.bad')); return; }
+    if (listByPl(pl)) { showErr(ui('m.pl.dup')); return; }
     showErr(''); busy(true);
     var typed = ($('#plName').value || '').trim();
-    (typed ? Promise.resolve(typed) : ytTitle(pl)).then(function (ti) {
-      return call('addList', { title: ti || ui(pl.indexOf('v:') === 0 ? 'm.pl.kindVideo' : 'm.pl.kindList') + ' (YouTube)', pl: pl });
-    }).then(function () { closeModal(); fetchedOnce = false; refresh(); }).then(null, function (e) { busy(false); showErr(e.message); });
+    var info = prevState && prevState.pl === pl ? Promise.resolve(prevState.info) : ytInfo(pl);
+    info.then(function (inf) {
+      if (inf.state === 'gone') throw new Error(ui('m.pl.gone'));
+      if (inf.state === 'blocked') throw new Error(ui('m.pl.blocked'));
+      var ttl = typed || inf.title || ui(pl.indexOf('v:') === 0 ? 'm.pl.kindVideo' : 'm.pl.kindList') + ' (YouTube)';
+      return call('addList', { title: ttl, pl: pl }).then(function (resp) { return { resp: resp, title: ttl }; });
+    }).then(function (x) {
+      closeModal();
+      var rec = listRec(x.resp, x.title, pl);
+      setTimeout(function () { showNew('list', [rec]); }, calm() ? 0 : 300); /* after the dialog has faded out */
+    }).then(null, function (e) { busy(false); showErr(e.message); });
   }
 
   /* ---------- internet resources added by members (Books page) ---------- */
@@ -730,8 +1122,8 @@
   }
   function webRow(w) {
     var sub = esc(hostOf(w.url)) + (w.by ? ' &middot; ' + esc(ui('m.lib.addedBy', { name: w.by })) : '');
-    return '<li class="weblink"><a class="weblink__a" href="' + esc(w.url) + '" target="_blank" rel="noopener noreferrer"><span class="weblink__t"><b>' + esc(w.ti) + '</b><small>' + sub + '</small></span><span class="weblink__go">' + ICON_EXT + '</span></a>' +
-      (w.mine && isTeam() ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(w.id) + '" data-sure="' + esc(ui('m.sure')) + '" aria-label="' + esc(ui('m.delete') + ': ' + w.ti) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '') + '</li>';
+    return '<li class="weblink" data-fid="' + esc(w.id) + '"><a class="weblink__a" href="' + esc(w.url) + '" target="_blank" rel="noopener noreferrer"><span class="weblink__t"><b>' + esc(w.ti) + '</b><small>' + sub + '</small></span><span class="weblink__go">' + ICON_EXT + '</span></a>' +
+      (w.mine && isTeam() ? '<button type="button" class="mls__del" data-m="del-list" data-id="' + esc(w.id) + '" aria-label="' + esc(ui('m.delete') + ': ' + w.ti) + '" title="' + esc(ui('m.delete')) + '">&times;</button>' : '') + '</li>';
   }
   function webHtml() {
     if (!S.tok) return '';
@@ -763,8 +1155,11 @@
     if (!safeUrl(u) || host.indexOf('.') < 0 || !CODE.hasOwnProperty(sub)) { showErr(ui('m.web.bad')); return; }
     showErr(''); busy(true);
     var ti = ($('#wlName').value || '').trim() || host;
-    call('addList', { title: CODE[sub] + '::' + ti, pl: 'u:' + u }).then(function () {
-      curSub = sub; try { out.onSubject(sub); } catch (e) { /* ignore */ } closeModal(); fetchedOnce = false; refresh();
+    var wt = CODE[sub] + '::' + ti;
+    call('addList', { title: wt, pl: 'u:' + u }).then(function (resp) {
+      curSub = sub; try { out.onSubject(sub); } catch (e) { /* ignore */ } closeModal();
+      var rec = listRec(resp, wt, 'u:' + u);
+      setTimeout(function () { showNew('list', [rec]); }, calm() ? 0 : 300);
     }).then(null, function (e) { busy(false); showErr(e.message); });
   }
 
@@ -783,6 +1178,13 @@
     if ((act === 'upload' || act === 'upopen' || act === 'addlist' || act === 'addlink') && !isTeam()) return; /* group members only; the backend refuses it too */
     if (act === 'upload' || act === 'upopen') { uploadBox(); return; }
     if (act === 'updock-x') { UPQ = UPQ.filter(function (u) { return u.st === 'run' || u.st === 'wait'; }); paintDock(); return; }
+    if (act === 'upcancel') { cancelUpload(UPQ[+el.getAttribute('data-i')]); return; }
+    if (act === 'upcancel-all') { UPQ.slice().forEach(cancelUpload); return; }
+    if (act === 'upretry') {
+      var ru = UPQ[+el.getAttribute('data-i')];
+      if (ru && ru.st === 'err' && !ru.skip) { ru.st = 'wait'; ru.done = 0; ru.msg = ''; ru.restarted = false; ru.cancel = false; paintUploads(); runUploads(); }
+      return;
+    }
     if (act === 'addlist') { addListBox(); return; }
     if (act === 'addlink') { addLinkBox(); return; }
     if (act === 'retry') { fetchedOnce = false; dbState = 'idle'; refresh(); return; }
@@ -798,7 +1200,7 @@
       call('setRole', { name: nm, role: rl }).then(function () {
         var u = userByName(nm);
         if (u) { if (u.role === 'ask' && DB && +DB.waiting > 0) DB.waiting = +DB.waiting - 1; u.role = rl; }
-        memFlash = nm; listDirty = true;
+        memFlash = nm; listDirty = true; changed('dot');
         morphBox(paintMembers);
       }, function (er) { pend(el, false); showErr(er.message); });
       return;
@@ -811,21 +1213,13 @@
         var u = userByName(dn);
         if (u && u.role === 'ask' && DB && +DB.waiting > 0) DB.waiting = +DB.waiting - 1;
         memUsers = (memUsers || []).filter(function (x) { return String(x.name) !== String(dn); });
-        listDirty = true;
+        listDirty = true; changed('dot');
         morphBox(paintMembers);
       }, function (er) { pend(el, false); showErr(er.message); });
       return;
     }
-    if (act === 'del-book') {
-      if (!armed(el)) return;
-      call('delBook', { id: el.getAttribute('data-id') }).then(function () { fetchedOnce = false; refresh(); }, function () { /* ignore */ });
-      return;
-    }
-    if (act === 'del-list') {
-      if (!armed(el)) return;
-      call('delList', { id: el.getAttribute('data-id') }).then(function () { fetchedOnce = false; refresh(); }, function () { /* ignore */ });
-      return;
-    }
+    if (act === 'del-book' || act === 'del-list') { askDelete(el); return; }
+    if (act === 'del-yes') { doDelete(el.getAttribute('data-kind'), el.getAttribute('data-id'), el.getAttribute('data-title') || ''); return; }
   });
   document.addEventListener('submit', function (e) {
     var f = e.target, id = f && f.id;
@@ -838,6 +1232,10 @@
   });
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'libQ') { libQ = e.target.value; var g = $('#libGrid'); if (g && DB) g.innerHTML = libGrid(); }
+    if (e.target && e.target.id === 'plUrl') { clearTimeout(prevTimer); prevTimer = setTimeout(previewList, 350); }
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.id === 'upFiles') paintPick();
   });
   document.addEventListener('keydown', function (e) {
     if (!modalEl) return;
@@ -850,6 +1248,8 @@
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
   });
+
+  if (S.tok) schedulePoll();
 
   window.SiteMembers = {
     enabled: enabled,
@@ -866,6 +1266,8 @@
     libraryHtml: libraryHtml,
     setSearch: function (q) { libQ = String(q || ''); },
     setSubject: function (k) { if (k === 'other' || CODE.hasOwnProperty(k)) curSub = k; },
+    snapshot: snapshot,
+    reveal: reveal,
     groupCount: function (k) { return DB ? libItems().filter(function (b) { return b.s === k; }).length : null; },
     webHtml: webHtml,
     webCount: function (k) { return DB ? webItems().filter(function (w) { return w.s === k; }).length : 0; },

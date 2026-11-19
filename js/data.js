@@ -165,6 +165,7 @@
       role: 'co',
       photo: 'img/atamurotov.jpg',
       affil: [
+        'Institute of Fundamental and Applied Research, TIIAME National Research University',
         'Inha University in Tashkent'
       ],
       interests: L(
