@@ -704,14 +704,17 @@
     var steps = [1, 2, 3].map(function (n) {
       return '<li class="step"><span class="step__n" aria-hidden="true">' + n + '</span><div class="step__body"><h3>' + esc(ui('join.s' + n + 't')) + '</h3><p>' + esc(ui('join.s' + n + 'd')) + '</p></div></li>';
     }).join('');
-    var lead = D.LEADERS[0];
+    var contacts = D.LEADERS.map(function (p) {
+      var mail = p.email || CFG.email;
+      return '<div class="contactblock"><p class="badge">' + esc(ui(p.role === 'lead' ? 'people.roleLead' : 'people.roleCo')) + '</p><h3 class="contactname">' + esc(t(p.name)) + '</h3>' +
+        '<p class="meta">' + esc(ui('join.email')) + '</p><p class="email"><a href="mailto:' + esc(mail) + '">' + esc(mail) + '</a> ' +
+        '<button type="button" class="btn btn--sm" data-copy="' + esc(mail) + '">' + esc(ui('join.copy')) + '</button></p>' +
+        '<ul class="linklist">' + (p.links || []).map(function (l) { return '<li>' + ext(l.url, esc(l.label)) + '</li>'; }).join('') + '</ul></div>';
+    }).join('');
     return pageHead('join.title', 'join.intro') +
       '<section class="wrap section split split--even"><div><h2>' + esc(ui('join.how')) + '</h2><ol class="steps steps--compact">' + steps + '</ol>' +
         '<p><a class="btn" href="#start">' + esc(ui('nav.start')) + '</a></p></div>' +
-      '<div class="panel"><h2>' + esc(ui('join.contact')) + '</h2><p class="badge">' + esc(ui('people.roleLead')) + '</p><h3 class="contactname">' + esc(t(lead.name)) + '</h3>' +
-        '<p class="meta">' + esc(ui('join.email')) + '</p><p class="email"><a href="mailto:' + esc(CFG.email) + '">' + esc(CFG.email) + '</a> ' +
-        '<button type="button" class="btn btn--sm" data-copy="' + esc(CFG.email) + '">' + esc(ui('join.copy')) + '</button></p>' +
-        '<ul class="linklist">' + lead.links.map(function (l) { return '<li>' + ext(l.url, esc(l.label)) + '</li>'; }).join('') + '</ul></div></section>';
+      '<div class="panel"><h2>' + esc(ui('join.contact')) + '</h2>' + contacts + '</div></section>';
   };
 
   /* ---------- render ---------- */

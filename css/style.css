@@ -406,6 +406,7 @@ details summary { cursor: pointer; font-weight: 600; font-size: 0.92rem; }
 .cites i { color: var(--text); }
 .cites .pill { flex: none; }
 .contactname { margin-bottom: 12px; }
+.contactblock + .contactblock { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line); }
 .email { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-family: var(--mono); }
 
 /* footer */

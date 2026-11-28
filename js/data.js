@@ -175,7 +175,8 @@
       links: [
         { label: 'INSPIRE-HEP', url: 'https://inspirehep.net/literature?q=a%20Atamurotov' },
         { label: 'Google Scholar', url: 'https://scholar.google.com/citations?user=7-XPshgAAAAJ&hl=ru' }
-      ]
+      ],
+      email: 'atamurotov@yahoo.com'
     }
   ];
 
